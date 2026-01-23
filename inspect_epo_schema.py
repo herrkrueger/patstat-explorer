@@ -12,12 +12,25 @@ import sys
 import json
 from datetime import datetime
 
+import pandas as pd
+
 try:
     from epo.tipdata.patstat import PatstatClient
 except ImportError:
     print("ERROR: epo.tipdata.patstat module not found.")
     print("Run this in EPO Jupyter environment.")
     sys.exit(1)
+
+
+def to_dataframe(result):
+    """Convert sql_query result (list of dicts) to DataFrame."""
+    if result is None:
+        return None
+    if isinstance(result, pd.DataFrame):
+        return result
+    if isinstance(result, list):
+        return pd.DataFrame(result) if result else pd.DataFrame()
+    return result
 
 
 def get_dataset_info(patstat):
@@ -31,8 +44,8 @@ def get_dataset_info(patstat):
         LIMIT 1
     """
     try:
-        result = patstat.sql_query(query, use_legacy_sql=False)
-        if len(result) > 0:
+        result = to_dataframe(patstat.sql_query(query, use_legacy_sql=False))
+        if result is not None and len(result) > 0:
             return result.iloc[0].to_dict()
     except Exception as e:
         print(f"Could not get dataset info: {e}")
@@ -54,7 +67,7 @@ def get_all_tables(patstat):
         ORDER BY size_bytes DESC NULLS LAST
     """
     try:
-        return patstat.sql_query(query, use_legacy_sql=False)
+        return to_dataframe(patstat.sql_query(query, use_legacy_sql=False))
     except Exception as e:
         # Fallback without storage info
         print(f"Storage info not available, trying basic query: {e}")
@@ -66,7 +79,7 @@ def get_all_tables(patstat):
             FROM `INFORMATION_SCHEMA.TABLES`
             ORDER BY table_name
         """
-        return patstat.sql_query(query, use_legacy_sql=False)
+        return to_dataframe(patstat.sql_query(query, use_legacy_sql=False))
 
 
 def get_table_schema(patstat, table_name):
@@ -82,7 +95,7 @@ def get_table_schema(patstat, table_name):
         WHERE table_name = '{table_name}'
         ORDER BY ordinal_position
     """
-    return patstat.sql_query(query, use_legacy_sql=False)
+    return to_dataframe(patstat.sql_query(query, use_legacy_sql=False))
 
 
 def get_table_partitioning(patstat, table_name):
@@ -100,8 +113,8 @@ def get_table_partitioning(patstat, table_name):
         LIMIT 20
     """
     try:
-        return patstat.sql_query(query, use_legacy_sql=False)
-    except:
+        return to_dataframe(patstat.sql_query(query, use_legacy_sql=False))
+    except Exception:
         return None
 
 
@@ -115,8 +128,8 @@ def get_table_options(patstat, table_name):
         WHERE table_name = '{table_name}'
     """
     try:
-        return patstat.sql_query(query, use_legacy_sql=False)
-    except:
+        return to_dataframe(patstat.sql_query(query, use_legacy_sql=False))
+    except Exception:
         return None
 
 
@@ -124,7 +137,7 @@ def get_table_sample(patstat, table_name, limit=5):
     """Get sample rows from a table."""
     query = f"SELECT * FROM `{table_name}` LIMIT {limit}"
     try:
-        return patstat.sql_query(query, use_legacy_sql=False)
+        return to_dataframe(patstat.sql_query(query, use_legacy_sql=False))
     except Exception as e:
         print(f"Could not get sample: {e}")
         return None
