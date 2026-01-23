@@ -15,26 +15,172 @@ QUERIES = {
     # OVERVIEW / DATABASE EXPLORATION
     # =========================================================================
     "Overview": {
-        "Database Tables": {
-            "description": "List all tables in the PATSTAT database",
-            "explanation": """This query shows all available tables in the PATSTAT database schema.
-Use this to explore what data is available before running specific analyses.""",
+        "Database Tables (detailed)": {
+            "description": "All PATSTAT tables with row counts, column counts, and size estimates",
+            "explanation": """Comprehensive overview of all tables in the PATSTAT database including:
+- Number of columns per table
+- Estimated row counts (from PostgreSQL statistics)
+- Table size on disk (data + indexes)
+
+Use this to understand the database structure and identify which tables contain the most data.""",
             "key_outputs": [
-                "Table names",
-                "Table types (BASE TABLE, VIEW)"
+                "Table names with descriptions",
+                "Column counts per table",
+                "Estimated row counts",
+                "Table size (MB)"
             ],
-            "estimated_seconds": 1,
+            "estimated_seconds": 3,
             "sql": """
-                SELECT table_name, table_type
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                ORDER BY table_name
+                SELECT
+                    t.table_name,
+                    COALESCE(obj_description(('"' || t.table_schema || '"."' || t.table_name || '"')::regclass), '-') AS description,
+                    COUNT(c.column_name) AS column_count,
+                    pg_stat_user_tables.n_live_tup AS estimated_rows,
+                    pg_size_pretty(pg_total_relation_size(('"' || t.table_schema || '"."' || t.table_name || '"')::regclass)) AS total_size
+                FROM information_schema.tables t
+                LEFT JOIN information_schema.columns c
+                    ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+                LEFT JOIN pg_stat_user_tables
+                    ON t.table_name = pg_stat_user_tables.relname
+                WHERE t.table_schema = 'public'
+                    AND t.table_type = 'BASE TABLE'
+                GROUP BY t.table_schema, t.table_name, pg_stat_user_tables.n_live_tup
+                ORDER BY pg_stat_user_tables.n_live_tup DESC NULLS LAST
+            """
+        },
+        "Database Statistics": {
+            "description": "Overall PATSTAT database statistics and key metrics",
+            "explanation": """High-level statistics about the PATSTAT database:
+- Total number of patent applications
+- Date range of the data
+- Number of unique applicants and inventors
+- Geographic coverage (countries)
+
+Essential for understanding the scope and coverage of the database.""",
+            "key_outputs": [
+                "Total patent applications",
+                "Date range (earliest to latest)",
+                "Unique applicants/inventors count",
+                "Countries covered"
+            ],
+            "estimated_seconds": 15,
+            "sql": """
+                SELECT
+                    'Total Applications' AS metric,
+                    TO_CHAR(COUNT(*), 'FM999,999,999') AS value
+                FROM tls201_appln
+                UNION ALL
+                SELECT
+                    'Earliest Filing Year',
+                    MIN(appln_filing_year)::TEXT
+                FROM tls201_appln WHERE appln_filing_year > 0
+                UNION ALL
+                SELECT
+                    'Latest Filing Year',
+                    MAX(appln_filing_year)::TEXT
+                FROM tls201_appln
+                UNION ALL
+                SELECT
+                    'Granted Patents',
+                    TO_CHAR(COUNT(*), 'FM999,999,999')
+                FROM tls201_appln WHERE granted = 'Y'
+                UNION ALL
+                SELECT
+                    'Unique Persons (Applicants/Inventors)',
+                    TO_CHAR(COUNT(*), 'FM999,999,999')
+                FROM tls206_person
+                UNION ALL
+                SELECT
+                    'Countries with Applicants',
+                    COUNT(DISTINCT person_ctry_code)::TEXT
+                FROM tls206_person WHERE person_ctry_code IS NOT NULL
+            """
+        },
+        "Filing Authorities": {
+            "description": "Patent offices (filing authorities) in the database with application counts",
+            "explanation": """Shows all patent offices/filing authorities in PATSTAT with their application volumes.
+Helps understand which patent offices are represented and their relative importance.
+
+EP = European Patent Office, US = USPTO, CN = CNIPA, etc.""",
+            "key_outputs": [
+                "Filing authority codes",
+                "Application counts per office",
+                "Percentage of total applications"
+            ],
+            "estimated_seconds": 10,
+            "sql": """
+                SELECT
+                    appln_auth AS filing_authority,
+                    COUNT(*) AS application_count,
+                    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS percentage
+                FROM tls201_appln
+                WHERE appln_auth IS NOT NULL
+                GROUP BY appln_auth
+                ORDER BY application_count DESC
+                LIMIT 30
+            """
+        },
+        "Applications by Year": {
+            "description": "Patent application trends over time (by filing year)",
+            "explanation": """Shows the distribution of patent applications across filing years.
+Useful for understanding data coverage and identifying trends in global patent activity.
+
+Note: Recent years may show lower counts due to publication delays (18 months from filing).""",
+            "key_outputs": [
+                "Applications per year",
+                "Year-over-year changes",
+                "Grant rates per year"
+            ],
+            "estimated_seconds": 20,
+            "sql": """
+                SELECT
+                    appln_filing_year,
+                    COUNT(*) AS applications,
+                    COUNT(*) - LAG(COUNT(*)) OVER (ORDER BY appln_filing_year) AS yoy_change,
+                    COUNT(CASE WHEN granted = 'Y' THEN 1 END) AS granted,
+                    ROUND(COUNT(CASE WHEN granted = 'Y' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS grant_rate_pct
+                FROM tls201_appln
+                WHERE appln_filing_year BETWEEN 1980 AND 2024
+                GROUP BY appln_filing_year
+                ORDER BY appln_filing_year DESC
+            """
+        },
+        "Top IPC Classes": {
+            "description": "Most common IPC technology classes in the database",
+            "explanation": """Shows the most frequently assigned IPC (International Patent Classification) classes.
+IPC classes indicate the technology area of a patent:
+- A: Human Necessities (medical, agriculture)
+- B: Operations/Transport (vehicles, printing)
+- C: Chemistry/Metallurgy
+- D: Textiles/Paper
+- E: Fixed Constructions
+- F: Mechanical Engineering
+- G: Physics (computing, optics)
+- H: Electricity (electronics, communication)""",
+            "key_outputs": [
+                "Top IPC classes by frequency",
+                "Application counts per class",
+                "Technology distribution"
+            ],
+            "estimated_seconds": 15,
+            "sql": """
+                SELECT
+                    SUBSTRING(ipc_class_symbol, 1, 4) AS ipc_class,
+                    COUNT(*) AS assignment_count,
+                    COUNT(DISTINCT appln_id) AS unique_applications,
+                    ROUND(COUNT(DISTINCT appln_id) * 100.0 / (SELECT COUNT(DISTINCT appln_id) FROM tls209_appln_ipc), 2) AS pct_of_applications
+                FROM tls209_appln_ipc
+                GROUP BY SUBSTRING(ipc_class_symbol, 1, 4)
+                ORDER BY assignment_count DESC
+                LIMIT 25
             """
         },
         "Sample Patents (tls201_appln)": {
-            "description": "Get a sample of 100 patents from tls201_appln",
+            "description": "Sample of 100 patent applications with key fields",
             "explanation": """Returns a sample of patent applications to understand the data structure
-and available fields in the main application table.""",
+and available fields in the main application table (tls201_appln).
+
+This is the central table in PATSTAT - most queries start here.""",
             "key_outputs": [
                 "Application IDs and dates",
                 "Filing authority codes",
@@ -43,9 +189,54 @@ and available fields in the main application table.""",
             ],
             "estimated_seconds": 2,
             "sql": """
-                SELECT *
+                SELECT
+                    appln_id,
+                    appln_auth,
+                    appln_nr,
+                    appln_filing_date,
+                    appln_filing_year,
+                    granted,
+                    docdb_family_id,
+                    docdb_family_size,
+                    nb_citing_docdb_fam,
+                    earliest_filing_date
                 FROM tls201_appln
+                WHERE appln_filing_year >= 2020
                 LIMIT 100
+            """
+        },
+        "PATSTAT Table Relationships": {
+            "description": "Key table relationships and join paths in PATSTAT",
+            "explanation": """Shows the main PATSTAT tables and their relationships via foreign keys.
+Essential for understanding how to join tables correctly.
+
+Key relationships:
+- tls201_appln (applications) → central table
+- tls206_person (persons) → applicants and inventors
+- tls207_pers_appln → links persons to applications
+- tls209_appln_ipc → IPC classifications
+- tls211_pat_publn → publications
+- tls212_citation → citation links""",
+            "key_outputs": [
+                "Table names",
+                "Foreign key columns",
+                "Referenced tables"
+            ],
+            "estimated_seconds": 2,
+            "sql": """
+                SELECT
+                    tc.table_name AS from_table,
+                    kcu.column_name AS from_column,
+                    ccu.table_name AS to_table,
+                    ccu.column_name AS to_column
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage ccu
+                    ON tc.constraint_name = ccu.constraint_name
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND tc.table_schema = 'public'
+                ORDER BY tc.table_name, kcu.column_name
             """
         },
     },
