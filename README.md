@@ -46,10 +46,10 @@ streamlit run app.py
 
 Query validation and performance testing for EPO's PATSTAT BigQuery instance.
 
-**Requirements:** Must be run in EPO TIP Jupyter environment with `PatstatClient` access.
+**Requirements:** Must be run in EPO TIP environment with `PatstatClient` access.
 
 ```python
-# In EPO Jupyter notebook
+# In EPO TIP Environment
 %run test_queries_bq.py
 
 # Or test a single query
@@ -63,8 +63,8 @@ Query validation and performance testing for EPO's PATSTAT BigQuery instance.
 ### 3. Migration Tools (`migration/`)
 
 Scripts for migrating PATSTAT data to your own BigQuery project.
-
 ```bash
+
 # Step 1: Export EPO schema (run in EPO Jupyter)
 python inspect_epo_schema.py
 
