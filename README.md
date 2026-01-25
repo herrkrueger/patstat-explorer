@@ -1,75 +1,105 @@
 # PATSTAT Explorer
 
-Streamlit-Anwendung zur Analyse der EPO PATSTAT-Datenbank auf Google BigQuery.
+A Streamlit application for analyzing the EPO PATSTAT patent database on Google BigQuery.
 
-**Live:** https://patstat.streamlit.app/
+**Live Demo:** [patstat.streamlit.app](https://patstat.streamlit.app/)
 
-## Übersicht
+## Overview
 
-PATSTAT Explorer bietet 18 vordefinierte SQL-Abfragen zur Patent-Analyse, organisiert in 7 Stakeholder-Kategorien:
+PATSTAT Explorer provides 18 predefined SQL queries for patent analysis, filterable by three stakeholder perspectives:
 
-| Kategorie | Abfragen | Beschreibung |
-|-----------|----------|--------------|
-| **Overview** | 5 | Datenbankstatistiken, Filing-Trends, IPC-Verteilung |
-| **Strategic Planning** | 2 | Länderaktivität, Green-Tech-Trends |
-| **Technology Scouting** | 3 | AI/ERP-Patente, Medizindiagnostik, Technologiefelder |
-| **Competitive Intelligence** | 2 | Top-Anmelder, geografische Filing-Strategien |
-| **Patent Prosecution** | 2 | Zitationsanalyse, Grant-Raten nach Amt |
-| **Regional Analysis (DE)** | 3 | Bundesländer, Pro-Kopf-Metriken, Tech-Sektoren |
-| **Technology Transfer** | 1 | Schnellstwachsende G06Q-Unterklassen |
+| Stakeholder | Description | Queries |
+|-------------|-------------|---------|
+| **PATLIB** | Patent Information Centers & Libraries | 8 |
+| **BUSINESS** | Companies & Industry | 11 |
+| **UNIVERSITY** | Universities & Research | 6 |
 
-## Projektstruktur
+### Query Catalog
+
+| ID | Title | Tags | Description |
+|----|-------|------|-------------|
+| Q01 | Database Statistics | PATLIB | Overall PATSTAT database statistics and key metrics |
+| Q02 | Filing Authorities | PATLIB | Patent offices with application counts |
+| Q03 | Applications by Year | PATLIB | Patent application trends over time |
+| Q04 | Top IPC Classes | PATLIB | Most common IPC technology classes |
+| Q05 | Sample Patents | PATLIB | Sample of 100 patent applications |
+| Q06 | Country Patent Activity | PATLIB, BUSINESS | Country ranking by patent volume since 2015 |
+| Q07 | Green Technology Trends | BUSINESS, UNIVERSITY | G7+China+Korea with green tech (CPC Y02) focus |
+| Q08 | Most Active Technology Fields | BUSINESS, UNIVERSITY | Technology fields with family size and citation impact |
+| Q09 | AI-based ERP Patent Landscape | BUSINESS | AI+ERP intersection (G06Q10 + G06N) since 2018 |
+| Q10 | AI-Assisted Diagnostics Companies | BUSINESS, UNIVERSITY | Companies in AI diagnostics (A61B + G06N) |
+| Q11 | Top Patent Applicants | BUSINESS | Top applicants since 2010 with portfolio profile |
+| Q12 | Competitor Filing Strategy (MedTech) | BUSINESS | Where major MedTech competitors file patents |
+| Q13 | Most Cited Patents (2020) | UNIVERSITY | Most influential prior art patents |
+| Q14 | Diagnostic Imaging Grant Rates | BUSINESS, UNIVERSITY | A61B 6/ grant rates at EPO vs USPTO vs CNIPA |
+| Q15 | German States - Medical Tech | PATLIB | German federal states in A61B diagnosis/surgery |
+| Q16 | German States - Per Capita Analysis | PATLIB | A61B activity with per-capita comparison |
+| Q17 | Regional Tech Sector Comparison | PATLIB | Sachsen, Bayern, Baden-Württemberg by WIPO sectors |
+| Q18 | Fastest-Growing G06Q Subclasses | BUSINESS, UNIVERSITY | Growth trends in IT methods for management |
+
+## Features
+
+- **Interactive Query Execution**: Run predefined queries with a single click
+- **Stakeholder Filtering**: Filter queries by PATLIB, BUSINESS, or UNIVERSITY perspective
+- **Result Visualization**: Tables with metrics (row count, execution time)
+- **Export Options**: Download results as CSV
+- **Query Documentation**: Each query includes explanation and key outputs
+- **Performance Estimates**: Cached vs. first-run timing displayed per query
+
+## Project Structure
 
 ```
 patstat/
-├── app.py              # Streamlit Web-Anwendung
-├── queries_bq.py       # 18 BigQuery-Abfragen
-├── requirements.txt    # Python-Abhängigkeiten
-├── .env.example        # Umgebungsvariablen-Template
-└── context/            # Dokumentation & Hilfsskripte
+├── app.py              # Streamlit web application
+├── queries_bq.py       # 18 BigQuery queries with metadata
+├── requirements.txt    # Python dependencies
+├── .env.example        # Environment variables template
+└── context/            # Documentation & helper scripts
 ```
 
-## Lokale Entwicklung
+## Local Development
 
-### Voraussetzungen
+### Prerequisites
 
 - Python 3.9+
-- Google Cloud Service Account mit BigQuery-Zugriff
+- Google Cloud Service Account with BigQuery access
 
 ### Installation
 
 ```bash
+git clone https://github.com/your-repo/patstat.git
+cd patstat
 pip install -r requirements.txt
 ```
 
-### Konfiguration
+### Configuration
 
-Erstelle eine `.env`-Datei:
+Create a `.env` file in the project root:
 
 ```bash
-# BigQuery
+# BigQuery Configuration
 BIGQUERY_PROJECT=patstat-mtc
 BIGQUERY_DATASET=patstat
 
-# Service Account Credentials (JSON als einzeiliger String)
+# Service Account Credentials (JSON as single-line string)
 GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account","project_id":"patstat-mtc",...}
 ```
 
-### Starten
+### Running Locally
 
 ```bash
 streamlit run app.py
 ```
 
-Die App läuft unter http://localhost:8501
+The app will be available at `http://localhost:8501`
 
 ## Streamlit Cloud Deployment
 
-Die App wird automatisch bei Push auf `main` deployed.
+The app is automatically deployed on push to the `main` branch.
 
-### Secrets konfigurieren
+### Configure Secrets
 
-In Streamlit Cloud → App Settings → Secrets:
+In Streamlit Cloud → App Settings → Secrets, add:
 
 ```toml
 [gcp_service_account]
@@ -86,62 +116,91 @@ client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
 universe_domain = "googleapis.com"
 ```
 
-## BigQuery-Datenbank
+## BigQuery Database
 
-| Projekt | Dataset | Region |
+| Project | Dataset | Region |
 |---------|---------|--------|
 | `patstat-mtc` | `patstat` | EU |
 
-### Wichtige Tabellen (~450 GB gesamt)
+### Key Tables (~450 GB total)
 
-| Tabelle | Zeilen | Größe | Beschreibung |
-|---------|--------|-------|--------------|
-| tls201_appln | 140M | ~25 GB | Patentanmeldungen |
-| tls212_citation | 597M | ~40 GB | Zitationsdaten |
-| tls224_appln_cpc | 436M | ~9 GB | CPC-Klassifikationen |
-| tls207_pers_appln | 408M | ~12 GB | Person-Anmeldung-Verknüpfungen |
-| tls209_appln_ipc | 375M | ~15 GB | IPC-Klassifikationen |
-| tls211_pat_publn | 168M | ~10 GB | Veröffentlichungen |
-| tls206_person | 98M | ~16 GB | Anmelder/Erfinder |
+| Table | Rows | Size | Description |
+|-------|------|------|-------------|
+| tls201_appln | 140M | ~25 GB | Patent applications |
+| tls206_person | 98M | ~16 GB | Applicants/Inventors |
+| tls207_pers_appln | 408M | ~12 GB | Person-application links |
+| tls209_appln_ipc | 375M | ~15 GB | IPC classifications |
+| tls211_pat_publn | 168M | ~10 GB | Publications |
+| tls212_citation | 597M | ~40 GB | Citation data |
+| tls224_appln_cpc | 436M | ~9 GB | CPC classifications |
+| tls230_appln_techn_field | - | - | WIPO technology field assignments |
+| tls801_country | - | - | Country reference data |
+| tls901_techn_field_ipc | - | - | WIPO technology field definitions |
+| tls904_nuts | - | - | NUTS regional codes |
 
 ### Performance
 
-| Metrik | Wert |
-|--------|------|
-| Erste Abfrage | 1-5s |
-| Gecachte Abfrage | 0.3-1s |
-| Geschätzte Kosten | ~$5-10/Monat |
+| Metric | Value |
+|--------|-------|
+| First query | 1-14s (depending on complexity) |
+| Cached query | 0.3-1s |
+| Estimated cost | ~$5-10/month |
 
-## Entwicklung
+## Development Guide
 
-### Neue Abfrage hinzufügen
+### Adding a New Query
 
-1. `queries_bq.py` bearbeiten
-2. Abfrage in passende Kategorie einfügen
-3. Metadaten angeben: `description`, `explanation`, `key_outputs`, `estimated_seconds_cached`, `estimated_seconds_first_run`
-4. Erst in BigQuery Console testen
+1. Edit `queries_bq.py`
+2. Add a new entry with the next ID (e.g., `Q19`)
+3. Include required metadata:
+   - `title`: Short query name
+   - `tags`: List of stakeholder tags (`PATLIB`, `BUSINESS`, `UNIVERSITY`)
+   - `description`: One-line description
+   - `explanation`: Detailed explanation of what the query does
+   - `key_outputs`: List of key metrics returned
+   - `estimated_seconds_first_run`: Expected time for uncached query
+   - `estimated_seconds_cached`: Expected time for cached query
+   - `sql`: The BigQuery SQL statement
+4. Test in BigQuery Console first
 
-### BigQuery SQL-Syntax
+### BigQuery SQL Syntax
 
 ```sql
--- Tabellennamen ohne Prefix (Default-Dataset wird automatisch gesetzt)
+-- Table names without prefix (default dataset is set automatically)
 SELECT * FROM tls201_appln
 
--- Type Casting
+-- Type casting
 CAST(field AS STRING)
 
--- Datum-Arithmetik
+-- Date arithmetic
 DATE_DIFF(date1, date2, DAY)
+
+-- IPC/CPC pattern matching
+WHERE ipc_class_symbol LIKE 'A61B%'
 ```
 
-## Zugriff
+## Data Access
 
-Für lokale Entwicklung werden Google Cloud Credentials benötigt.
+For local development, Google Cloud credentials are required.
 
-**Credentials anfragen bei:** arne.krueger@mtc.berlin
+**Request credentials:** arne@mtc.berlin
 
-Du erhältst eine JSON-Datei mit dem Service Account, die du in der `.env` als `GOOGLE_APPLICATION_CREDENTIALS_JSON` einträgst (siehe Konfiguration oben).
+You will receive a JSON file with the service account. Add it to your `.env` file as `GOOGLE_APPLICATION_CREDENTIALS_JSON` (see Configuration above).
+
+## License
+
+All code in this project © 2026 by Arne Krueger is licensed under [CC BY 4.0 (Attribution 4.0 International)](https://creativecommons.org/licenses/by/4.0/).
+
+When using this code, please credit as follows:
+
+> Code authored by Arne Krueger, mtc.berlin, 2026.
+
+## Contact
+
+**Report bugs or request features:** arne@mtc.berlin
+
+**LinkedIn:** [linkedin.com/in/herrkrueger](https://www.linkedin.com/in/herrkrueger/)
 
 ---
 
-**PATSTAT Version:** 2024 Autumn Edition
+**PATSTAT Version:** 2025 Autumn Edition
