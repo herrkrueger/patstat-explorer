@@ -222,8 +222,8 @@ Tracks both total applications and the proportion dedicated to green tech.""",
             "sql": """
                 SELECT
                     a.appln_filing_year,
-                    c.ctry_code,
-                    c.st3_name AS country_name,
+                    c.string_field_0 AS ctry_code,
+                    c.string_field_2 AS country_name,
                     COUNT(DISTINCT a.appln_id) AS applications,
                     COUNT(DISTINCT CASE WHEN a.granted = 'Y' THEN a.appln_id END) AS granted,
                     COUNT(DISTINCT CASE WHEN cpc.cpc_class_symbol LIKE 'Y02%' THEN a.appln_id END) AS green_tech_patents,
@@ -232,12 +232,12 @@ Tracks both total applications and the proportion dedicated to green tech.""",
                 FROM tls201_appln a
                 JOIN tls207_pers_appln pa ON a.appln_id = pa.appln_id
                 JOIN tls206_person p ON pa.person_id = p.person_id
-                JOIN tls801_country c ON p.person_ctry_code = c.ctry_code
+                JOIN tls801_country c ON p.person_ctry_code = c.string_field_0
                 LEFT JOIN tls224_appln_cpc cpc ON a.appln_id = cpc.appln_id
                 WHERE a.appln_filing_year BETWEEN 2015 AND 2022
                   AND pa.applt_seq_nr > 0
-                  AND c.ctry_code IN ('US', 'DE', 'JP', 'CN', 'KR', 'FR', 'GB')
-                GROUP BY a.appln_filing_year, c.ctry_code, c.st3_name
+                  AND c.string_field_0 IN ('US', 'DE', 'JP', 'CN', 'KR', 'FR', 'GB')
+                GROUP BY a.appln_filing_year, c.string_field_0, c.string_field_2
                 ORDER BY a.appln_filing_year DESC, green_tech_percentage DESC
             """
         },
