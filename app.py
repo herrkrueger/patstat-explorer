@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 st.title("📊 PATSTAT Explorer")
-st.caption("Patent Analysis Platform - EPO PATSTAT 2024 Autumn on BigQuery")
+st.caption("Patent Analysis Platform - EPO PATSTAT 2025 Autumn on BigQuery by mtc")
 
 
 @st.cache_resource
