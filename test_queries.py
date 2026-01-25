@@ -56,17 +56,15 @@ def main():
     print("=" * 70)
     print("Running queries...\n")
 
-    # Collect all queries
-    all_queries = []
-    for category, queries in QUERIES.items():
-        for name, info in queries.items():
-            all_queries.append((category, name, info))
+    # Collect all queries (new flat structure with Q01, Q02, etc.)
+    all_queries = [(qid, info) for qid, info in QUERIES.items()]
 
     print(f"Total queries: {len(all_queries)}")
     print()
 
     # Run each query
-    for category, name, info in all_queries:
+    for qid, info in all_queries:
+        name = f"{qid} - {info['title']}"
         sql = info["sql"]
         est_first = info.get("estimated_seconds_first_run", 1)
         est_cached = info.get("estimated_seconds_cached", 1)
