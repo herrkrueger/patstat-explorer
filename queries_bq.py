@@ -955,11 +955,11 @@ Use this to identify technology trends, compare jurisdictions, or track sector g
         "estimated_seconds_first_run": 8,
         "estimated_seconds_cached": 2,
         "parameters": {
-            "jurisdiction": {
-                "type": "select",
-                "label": "Filing Jurisdiction",
-                "description": "Patent office where applications were filed",
-                "default": "EP",
+            "jurisdictions": {
+                "type": "multiselect",
+                "label": "Filing Jurisdictions",
+                "description": "Patent offices where applications were filed (compare multiple)",
+                "default": ["EP", "US", "CN"],
                 "options_query": "JURISDICTIONS"  # Reference to load from database
             },
             "tech_field": {
@@ -980,17 +980,18 @@ Use this to identify technology trends, compare jurisdictions, or track sector g
         },
         "sql_template": """
             SELECT
+                a.appln_auth AS jurisdiction,
                 a.appln_filing_year AS year,
                 COUNT(DISTINCT a.appln_id) AS application_count,
                 COUNT(DISTINCT a.docdb_family_id) AS invention_count
             FROM tls201_appln a
             JOIN tls230_appln_techn_field tf ON a.appln_id = tf.appln_id
-            WHERE a.appln_auth = @jurisdiction
+            WHERE a.appln_auth IN UNNEST(@jurisdictions)
               AND tf.techn_field_nr = @tech_field
               AND a.appln_filing_year BETWEEN @year_start AND @year_end
               AND tf.weight > 0.5
-            GROUP BY a.appln_filing_year
-            ORDER BY a.appln_filing_year ASC
+            GROUP BY a.appln_auth, a.appln_filing_year
+            ORDER BY a.appln_auth, a.appln_filing_year ASC
         """
     },
 }
