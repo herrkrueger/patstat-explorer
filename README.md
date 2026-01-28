@@ -48,36 +48,13 @@ PATSTAT Explorer provides **19 predefined SQL queries** (18 static + 1 dynamic/i
 - **Query Documentation**: Each query includes explanation and key outputs
 - **Performance Estimates**: Cached vs. first-run timing displayed per query
 
-## Project Structure
-
-```
-patstat/
-├── app.py                  # Streamlit web application (entry point)
-├── queries_bq.py           # 19 BigQuery queries with metadata
-├── test_queries.py         # Query validation and timing tests
-├── requirements.txt        # Python dependencies
-├── .env.example            # Environment variables template
-├── docs/                   # Generated documentation
-│   ├── index.md           # Documentation index
-│   ├── project-overview.md # Architecture and tech stack
-│   ├── query-catalog.md   # Complete query reference
-│   ├── bigquery-schema.md # PATSTAT table definitions
-│   └── data-loading.md    # BigQuery loading guide
-└── context/                # Reference materials
-    ├── load_patstat_local.py      # BigQuery data loading utility
-    ├── create_patstat_tables.sql  # PostgreSQL schema (reference)
-    └── Documentation_Scripts/     # EPO PATSTAT reference docs
-```
-
 ## Local Development
-
 ### Prerequisites
 
 - Python 3.9+
-- Google Cloud Service Account with BigQuery access
+- Google Cloud Service Account with BigQuery access to a PATSTAT instance
 
 ### Installation
-
 ```bash
 git clone https://github.com/herrkrueger/patstat.git
 cd patstat
@@ -87,48 +64,41 @@ pip install -r requirements.txt
 ```
 
 ### Configuration
-
 Create a `.env` file in the project root:
-
 ```bash
 # BigQuery Configuration
-BIGQUERY_PROJECT=patstat-mtc
-BIGQUERY_DATASET=patstat
+BIGQUERY_PROJECT="YOUR PROJECT ID"
+BIGQUERY_DATASET="YOUR DATASET NAME"
 
 # Service Account Credentials (JSON as single-line string)
-GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account","project_id":"patstat-mtc",...}
+GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account","project_id":"YOUR PROJECT ID",...}
 ```
 
 ### Running Locally
-
 ```bash
 streamlit run app.py
 ```
 
 The app will be available at `http://localhost:8501`
-
 ### Testing
-
 ```bash
 # Run all query tests with timing report
 python test_queries.py
 ```
 
 ## Streamlit Cloud Deployment
-
 The app is automatically deployed on push to the `main` branch.
 
 ### Configure Secrets
-
 In Streamlit Cloud → App Settings → Secrets, add:
 
 ```toml
 [gcp_service_account]
 type = "service_account"
-project_id = "patstat-mtc"
-private_key_id = "..."
+project_id = "YOUR PROJECT ID"
+private_key_id = "YOUR PRIVATE KEY"
 private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-client_email = "patstat-reader@patstat-mtc.iam.gserviceaccount.com"
+client_email = "yourname@yourprojectid.iam.gserviceaccount.com"
 client_id = "..."
 auth_uri = "https://accounts.google.com/o/oauth2/auth"
 token_uri = "https://oauth2.googleapis.com/token"
@@ -137,13 +107,9 @@ client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
 universe_domain = "googleapis.com"
 ```
 
-## BigQuery Database
+## BigQuery PATSTAT Database
 
-| Project | Dataset | Region | Size |
-|---------|---------|--------|------|
-| `patstat-mtc` | `patstat` | EU | ~450 GB |
-
-### Key Tables (27 total)
+### Key Tables (11 out of 27 total)
 
 | Table | Rows | Description |
 |-------|------|-------------|
@@ -167,10 +133,8 @@ See [docs/bigquery-schema.md](docs/bigquery-schema.md) for complete schema docum
 |--------|-------|
 | First query | 1-14s (depending on complexity) |
 | Cached query | 0.3-1s |
-| Estimated cost | ~$5-10/month |
 
 ## Development Guide
-
 ### Adding a New Query
 
 1. Edit `queries_bq.py`
@@ -212,7 +176,6 @@ WHERE tf.weight > 0.5
 ## Documentation
 
 Detailed documentation is available in the `docs/` folder:
-
 - [Documentation Index](docs/index.md) - Start here
 - [Project Overview](docs/project-overview.md) - Architecture and setup
 - [Query Catalog](docs/query-catalog.md) - Complete query reference with SQL
@@ -220,7 +183,6 @@ Detailed documentation is available in the `docs/` folder:
 - [Data Loading Guide](docs/data-loading.md) - Loading PATSTAT to BigQuery
 
 ## Data Access
-
 For local development, Google Cloud credentials are required.
 
 **Request credentials:** arne@mtc.berlin
