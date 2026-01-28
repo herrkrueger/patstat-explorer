@@ -44,11 +44,11 @@ development_status:
   epic-1: in-progress
   1-1-landing-page-with-question-based-navigation: done
   1-2-detail-page-layout-and-parameter-block: done
-  1-3-query-execution-and-results-display: backlog
-  1-4-insight-headlines-and-altair-visualization: backlog
-  1-5-export-and-download-functionality: backlog
-  1-6-sql-transparency-features: backlog
-  1-7-convert-all-static-queries-to-dynamic: backlog
+  1-3-query-execution-and-results-display: done
+  1-4-insight-headlines-and-altair-visualization: done
+  1-5-export-and-download-functionality: done
+  1-6-sql-transparency-features: done
+  1-7-convert-all-static-queries-to-dynamic: partial
   epic-1-retrospective: optional
 
   # Epic 2: Query Library Expansion

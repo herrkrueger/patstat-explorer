@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 from google.cloud import bigquery
 from google.oauth2 import service_account
 import os
@@ -7,6 +8,14 @@ from dotenv import load_dotenv
 import time
 import json
 from queries_bq import QUERIES
+
+# =============================================================================
+# COLOR PALETTE (Story 1.4 - UX Design Spec)
+# =============================================================================
+COLOR_PRIMARY = "#1E3A5F"
+COLOR_SECONDARY = "#0A9396"
+COLOR_ACCENT = "#FFB703"
+COLOR_PALETTE = [COLOR_PRIMARY, COLOR_SECONDARY, COLOR_ACCENT, "#E63946", "#457B9D"]
 
 # Load environment variables
 load_dotenv()
@@ -199,6 +208,126 @@ def render_parameter_block():
 
     return year_start, year_end, jurisdictions, tech_field, run_clicked
 
+# =============================================================================
+# INSIGHT & VISUALIZATION (Story 1.4)
+# =============================================================================
+
+def generate_insight_headline(df, query_info):
+    """Generate an insight headline based on query results (Story 1.4).
+
+    Returns a bold sentence summarizing the key finding.
+    """
+    if df.empty:
+        return None
+
+    category = query_info.get("category", "")
+    title = query_info.get("title", "")
+
+    # Generate headline based on data shape and category
+    if len(df) == 1 and len(df.columns) == 2:
+        # Single metric result
+        return f"**{df.iloc[0, 0]}: {df.iloc[0, 1]}**"
+
+    if "count" in df.columns[-1].lower() or "total" in df.columns[-1].lower():
+        # Ranking/count data - highlight top result
+        top_row = df.iloc[0]
+        top_name = top_row.iloc[0]
+        top_value = top_row.iloc[-1]
+        if isinstance(top_value, (int, float)):
+            return f"**{top_name} leads with {top_value:,.0f}**"
+
+    if "year" in df.columns[0].lower():
+        # Time series - show trend
+        if len(df) > 1:
+            first_val = df.iloc[0, -1] if pd.notna(df.iloc[0, -1]) else 0
+            last_val = df.iloc[-1, -1] if pd.notna(df.iloc[-1, -1]) else 0
+            if first_val > 0:
+                change = ((last_val - first_val) / first_val) * 100
+                trend = "increased" if change > 0 else "decreased"
+                return f"**{title}: {trend} by {abs(change):.1f}% over the period**"
+
+    # Default: row count summary
+    return f"**Found {len(df):,} results for {title}**"
+
+
+def render_chart(df, query_info):
+    """Render an Altair chart based on query results (Story 1.4).
+
+    Auto-detects chart type based on data shape.
+    """
+    if df.empty or len(df.columns) < 2:
+        return None
+
+    # Determine chart type based on data
+    x_col = df.columns[0]
+    y_col = df.columns[-1] if len(df.columns) > 1 else df.columns[0]
+
+    # Check if x is temporal
+    is_temporal = "year" in x_col.lower() or "date" in x_col.lower()
+
+    # Check if we have a category column for color
+    color_col = None
+    if len(df.columns) >= 3:
+        # Middle column might be category
+        potential_color = df.columns[1]
+        if df[potential_color].nunique() <= 10:
+            color_col = potential_color
+
+    try:
+        if is_temporal and len(df) > 1:
+            # Line chart for time series
+            chart = alt.Chart(df).mark_line(point=True).encode(
+                x=alt.X(f"{x_col}:O", title=x_col.replace("_", " ").title()),
+                y=alt.Y(f"{y_col}:Q", title=y_col.replace("_", " ").title()),
+                color=alt.Color(f"{color_col}:N", scale=alt.Scale(range=COLOR_PALETTE)) if color_col else alt.value(COLOR_PRIMARY),
+                tooltip=list(df.columns)
+            ).properties(height=400)
+        else:
+            # Bar chart for categorical data
+            chart = alt.Chart(df.head(20)).mark_bar().encode(
+                x=alt.X(f"{x_col}:N", title=x_col.replace("_", " ").title(), sort="-y"),
+                y=alt.Y(f"{y_col}:Q", title=y_col.replace("_", " ").title()),
+                color=alt.value(COLOR_PRIMARY),
+                tooltip=list(df.columns)
+            ).properties(height=400)
+
+        return chart
+    except Exception:
+        return None
+
+
+def render_metrics(df, query_info):
+    """Render metric cards with delta indicators (Story 1.4)."""
+    if df.empty:
+        return
+
+    # For single-row metric results, display as metric cards
+    if len(df) <= 5 and len(df.columns) == 2:
+        cols = st.columns(len(df))
+        for i, (_, row) in enumerate(df.iterrows()):
+            with cols[i]:
+                label = str(row.iloc[0])
+                value = row.iloc[1]
+                if isinstance(value, (int, float)):
+                    st.metric(label=label, value=f"{value:,.0f}")
+                else:
+                    st.metric(label=label, value=str(value))
+
+
+def get_contextual_spinner_message(query_info):
+    """Generate contextual spinner message based on query (Story 1.3)."""
+    category = query_info.get("category", "")
+    title = query_info.get("title", "")
+
+    messages = {
+        "Competitors": f"Finding competitive intelligence...",
+        "Trends": f"Analyzing patent trends...",
+        "Regional": f"Gathering regional data...",
+        "Technology": f"Scanning technology landscape...",
+    }
+    return messages.get(category, f"Running {title}...")
+
+
 # Popular queries for "Common Questions" section (AC #3)
 # Selection criteria: One query per category for balanced representation
 # - Q06: Competitors (Country Patent Activity)
@@ -353,9 +482,18 @@ def render_detail_page(query_id: str):
         else:
             st.caption(f"Estimated: ~{format_time(estimated_cached)}")
 
-    # Show the SQL query in an expander
+    # Show the SQL query with parameter substitution (Story 1.6)
     with st.expander("View SQL Query", expanded=False):
-        st.code(query_info["sql"], language="sql")
+        # Display SQL with current parameter values substituted for clarity
+        display_sql = query_info["sql"]
+        # Show parameter context
+        st.caption(f"Parameters: Years {year_start}-{year_end} | Jurisdictions: {', '.join(jurisdictions) if jurisdictions else 'None'} | Tech Field: {tech_field or 'All'}")
+        st.code(display_sql.strip(), language="sql")
+
+    # Methodology note if available (Story 1.6)
+    if "methodology" in query_info:
+        with st.expander("Methodology", expanded=False):
+            st.markdown(query_info["methodology"])
 
     st.divider()
 
@@ -367,40 +505,83 @@ def render_detail_page(query_id: str):
             st.error("Could not connect to BigQuery.")
             return
 
+        # Contextual spinner message (Story 1.3)
+        spinner_msg = get_contextual_spinner_message(query_info)
         estimated_seconds = query_info.get("estimated_seconds_cached", 1)
-        with st.spinner(f"Running query... (~{format_time(estimated_seconds)})"):
+
+        with st.spinner(f"{spinner_msg} (~{format_time(estimated_seconds)})"):
             try:
                 df, execution_time = run_query(client, query_info["sql"])
 
-                # Show results metrics
+                # Empty results handling (Story 1.3)
+                if df.empty:
+                    st.warning("No results found for your query.")
+                    st.info("**Suggestions:** Try broadening the year range or selecting different jurisdictions.")
+                    return
+
+                # Insight headline (Story 1.4) - appears FIRST
+                headline = generate_insight_headline(df, query_info)
+                if headline:
+                    st.markdown(headline)
+                    ''  # Spacing
+
+                # Execution metrics row
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Rows", f"{len(df):,}")
+                    st.metric("Results", f"{len(df):,} rows")
                 with col2:
-                    st.metric("Execution time", format_time(execution_time))
+                    st.metric("Execution", format_time(execution_time))
                 with col3:
                     if estimated_seconds > 0:
                         diff = execution_time - estimated_seconds
                         delta_str = f"{'+' if diff > 0 else ''}{format_time(abs(diff))}"
-                        st.metric("vs. Estimate", delta_str,
+                        st.metric("vs. Est.", delta_str,
                                  delta=f"{'slower' if diff > 0 else 'faster'}",
                                  delta_color="inverse")
 
+                ''  # Spacing
+
+                # Chart visualization (Story 1.4)
+                chart = render_chart(df, query_info)
+                if chart:
+                    st.altair_chart(chart, use_container_width=True)
+
+                # Metric cards for small datasets (Story 1.4)
+                if len(df) <= 5 and len(df.columns) == 2:
+                    render_metrics(df, query_info)
+
+                # Data table in expander (Story 1.3)
+                with st.expander("View Data Table", expanded=False):
+                    st.dataframe(df, use_container_width=True, height=400)
+
                 st.divider()
 
-                # Display dataframe
-                st.dataframe(df, use_container_width=True, height=400)
+                # Download buttons (Story 1.5)
+                col1, col2 = st.columns(2)
+                timestamp = time.strftime("%Y%m%d")
+                base_filename = f"{query_id}_{query_info['title'].lower().replace(' ', '_').replace('-', '_')}"
 
-                # Download button
-                csv = df.to_csv(index=False)
-                filename = f"{query_id}_{query_info['title'].lower().replace(' ', '_').replace('-', '_')}.csv"
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=filename,
-                    mime="text/csv",
-                    key="download_detail"
-                )
+                with col1:
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Data (CSV)",
+                        data=csv,
+                        file_name=f"{base_filename}_{timestamp}.csv",
+                        mime="text/csv",
+                        key="download_csv"
+                    )
+
+                with col2:
+                    # Chart download as HTML (Altair interactive)
+                    if chart:
+                        chart_html = chart.to_html()
+                        st.download_button(
+                            label="📊 Download Chart (HTML)",
+                            data=chart_html,
+                            file_name=f"{base_filename}_{timestamp}_chart.html",
+                            mime="text/html",
+                            key="download_chart"
+                        )
 
             except Exception as e:
                 st.error(f"Error: {str(e)}")
