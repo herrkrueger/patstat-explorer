@@ -285,8 +285,17 @@ class TestDetailPage:
         mock_st.header = MagicMock()
         mock_st.markdown = MagicMock()
         mock_st.divider = MagicMock()
-        mock_st.columns = MagicMock(return_value=[MagicMock(), MagicMock()])
+        mock_st.write = MagicMock()
+        # Return 4 columns for parameter block
+        mock_st.columns = MagicMock(return_value=[MagicMock(), MagicMock(), MagicMock(), MagicMock()])
         mock_st.expander = MagicMock(return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()))
+        mock_container = MagicMock()
+        mock_container.__enter__ = MagicMock(return_value=mock_container)
+        mock_container.__exit__ = MagicMock(return_value=None)
+        mock_st.container = MagicMock(return_value=mock_container)
+        mock_st.slider = MagicMock(return_value=(2015, 2024))
+        mock_st.multiselect = MagicMock(return_value=["EP", "US", "CN"])
+        mock_st.selectbox = MagicMock(return_value=None)
         mock_st.code = MagicMock()
         mock_st.caption = MagicMock()
         mock_st.spinner = MagicMock(return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()))
@@ -372,9 +381,18 @@ class TestMainRouting:
         mock_st.header = MagicMock()
         mock_st.markdown = MagicMock()
         mock_st.divider = MagicMock()
+        mock_st.write = MagicMock()
         mock_st.button = MagicMock(return_value=False)
-        mock_st.columns = MagicMock(return_value=[MagicMock(), MagicMock()])
+        # Return 4 columns for parameter block
+        mock_st.columns = MagicMock(return_value=[MagicMock(), MagicMock(), MagicMock(), MagicMock()])
         mock_st.expander = MagicMock(return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()))
+        mock_container = MagicMock()
+        mock_container.__enter__ = MagicMock(return_value=mock_container)
+        mock_container.__exit__ = MagicMock(return_value=None)
+        mock_st.container = MagicMock(return_value=mock_container)
+        mock_st.slider = MagicMock(return_value=(2015, 2024))
+        mock_st.multiselect = MagicMock(return_value=["EP", "US", "CN"])
+        mock_st.selectbox = MagicMock(return_value=None)
         mock_st.code = MagicMock()
         mock_st.caption = MagicMock()
 
@@ -383,6 +401,78 @@ class TestMainRouting:
         # Should have called button with back text
         button_calls = [str(call) for call in mock_st.button.call_args_list]
         assert any('Back' in call for call in button_calls)
+
+
+# =============================================================================
+# Story 1.2: Parameter Block Tests
+# =============================================================================
+
+class TestParameterSessionState:
+    """Test parameter session state management (Story 1.2 Task 1)."""
+
+    def test_init_session_state_sets_year_range_defaults(self):
+        """1.1: year_start and year_end default to sensible values."""
+        init_session_state()
+
+        assert mock_st.session_state['year_start'] == 2015
+        assert mock_st.session_state['year_end'] == 2024
+
+    def test_init_session_state_sets_jurisdictions_default(self):
+        """1.1: jurisdictions defaults to EP, US, CN."""
+        init_session_state()
+
+        assert mock_st.session_state['jurisdictions'] == ["EP", "US", "CN"]
+
+    def test_init_session_state_sets_tech_field_default(self):
+        """1.1: tech_field defaults to None (all fields)."""
+        init_session_state()
+
+        assert mock_st.session_state['tech_field'] is None
+
+    def test_go_to_landing_clears_parameter_state(self):
+        """1.3: go_to_landing() clears parameter state (AC #2)."""
+        # Set some parameter values
+        mock_st.session_state['year_start'] = 2010
+        mock_st.session_state['year_end'] = 2020
+        mock_st.session_state['jurisdictions'] = ["JP", "KR"]
+        mock_st.session_state['tech_field'] = 13
+
+        go_to_landing()
+
+        # Parameters should be reset to defaults
+        assert mock_st.session_state['year_start'] == 2015
+        assert mock_st.session_state['year_end'] == 2024
+        assert mock_st.session_state['jurisdictions'] == ["EP", "US", "CN"]
+        assert mock_st.session_state['tech_field'] is None
+
+
+class TestParameterBlock:
+    """Test parameter block component (Story 1.2 Task 3)."""
+
+    def test_render_parameter_block_exists(self):
+        """3.1: render_parameter_block function should exist."""
+        from app import render_parameter_block
+        assert callable(render_parameter_block)
+
+    def test_parameter_block_uses_bordered_container(self):
+        """3.2: Parameter block uses st.container(border=True)."""
+        from app import render_parameter_block
+
+        # Reset mocks
+        mock_container = MagicMock()
+        mock_container.__enter__ = MagicMock(return_value=mock_container)
+        mock_container.__exit__ = MagicMock(return_value=None)
+        mock_st.container = MagicMock(return_value=mock_container)
+        mock_st.slider = MagicMock(return_value=(2015, 2024))
+        mock_st.multiselect = MagicMock(return_value=["EP", "US", "CN"])
+        mock_st.selectbox = MagicMock(return_value=None)
+        mock_st.button = MagicMock(return_value=False)
+        mock_st.columns = MagicMock(return_value=[MagicMock(), MagicMock(), MagicMock(), MagicMock()])
+
+        render_parameter_block()
+
+        # Check container was called with border=True
+        mock_st.container.assert_called_with(border=True)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 import time
 import json
-from queries_bq import QUERIES, STAKEHOLDERS
+from queries_bq import QUERIES
 
 # Load environment variables
 load_dotenv()
@@ -16,14 +16,28 @@ load_dotenv()
 # SESSION STATE & NAVIGATION (Story 1.1)
 # =============================================================================
 
+# Default parameter values (DRY - single source of truth)
+DEFAULT_YEAR_START = 2015
+DEFAULT_YEAR_END = 2024
+DEFAULT_JURISDICTIONS = ["EP", "US", "CN"]
+DEFAULT_TECH_FIELD = None
+
+
 def init_session_state():
-    """Initialize session state for page navigation.
+    """Initialize session state for page navigation and parameters.
 
     Sets default values only if keys don't already exist.
+    Navigation state:
     - current_page: 'landing' or 'detail'
     - selected_query: query ID when on detail page
     - selected_category: preserves category filter across navigation
+
+    Parameter state (Story 1.2):
+    - year_start, year_end: year range for queries
+    - jurisdictions: list of patent office codes
+    - tech_field: WIPO technology field code or None
     """
+    # Navigation state
     if 'current_page' not in st.session_state:
         st.session_state['current_page'] = 'landing'
     if 'selected_query' not in st.session_state:
@@ -31,12 +45,32 @@ def init_session_state():
     if 'selected_category' not in st.session_state:
         st.session_state['selected_category'] = None
 
+    # Parameter state (Story 1.2)
+    if 'year_start' not in st.session_state:
+        st.session_state['year_start'] = DEFAULT_YEAR_START
+    if 'year_end' not in st.session_state:
+        st.session_state['year_end'] = DEFAULT_YEAR_END
+    if 'jurisdictions' not in st.session_state:
+        st.session_state['jurisdictions'] = DEFAULT_JURISDICTIONS.copy()
+    if 'tech_field' not in st.session_state:
+        st.session_state['tech_field'] = DEFAULT_TECH_FIELD
+
 
 def go_to_landing():
-    """Navigate to landing page, preserving category selection (AC #5)."""
+    """Navigate to landing page, preserving category selection (AC #5).
+
+    Resets parameter state to defaults (Story 1.2 AC #2).
+    """
     st.session_state['current_page'] = 'landing'
     st.session_state['selected_query'] = None
     # Keep selected_category for state restoration
+
+    # Reset parameter state to defaults (Story 1.2 AC #2)
+    st.session_state['year_start'] = DEFAULT_YEAR_START
+    st.session_state['year_end'] = DEFAULT_YEAR_END
+    st.session_state['jurisdictions'] = DEFAULT_JURISDICTIONS.copy()
+    st.session_state['tech_field'] = DEFAULT_TECH_FIELD
+
     st.rerun()
 
 
@@ -55,6 +89,115 @@ def go_to_detail(query_id: str):
 
 # Category definitions for landing page pills (AC #1)
 CATEGORIES = ["Competitors", "Trends", "Regional", "Technology"]
+
+# =============================================================================
+# PARAMETER REFERENCE DATA (Story 1.2)
+# =============================================================================
+
+# Available jurisdictions for multiselect
+JURISDICTIONS = ["EP", "US", "CN", "JP", "KR", "DE", "FR", "GB", "WO"]
+
+# WIPO Technology Fields with sector grouping
+# Source: WIPO IPC-Technology Concordance
+TECH_FIELDS = {
+    1: ("Electrical machinery, apparatus, energy", "Electrical engineering"),
+    2: ("Audio-visual technology", "Electrical engineering"),
+    3: ("Telecommunications", "Electrical engineering"),
+    4: ("Digital communication", "Electrical engineering"),
+    5: ("Basic communication processes", "Electrical engineering"),
+    6: ("Computer technology", "Electrical engineering"),
+    7: ("IT methods for management", "Electrical engineering"),
+    8: ("Semiconductors", "Electrical engineering"),
+    9: ("Optics", "Instruments"),
+    10: ("Measurement", "Instruments"),
+    11: ("Analysis of biological materials", "Instruments"),
+    12: ("Control", "Instruments"),
+    13: ("Medical technology", "Instruments"),
+    14: ("Organic fine chemistry", "Chemistry"),
+    15: ("Biotechnology", "Chemistry"),
+    16: ("Pharmaceuticals", "Chemistry"),
+    17: ("Macromolecular chemistry, polymers", "Chemistry"),
+    18: ("Food chemistry", "Chemistry"),
+    19: ("Basic materials chemistry", "Chemistry"),
+    20: ("Materials, metallurgy", "Chemistry"),
+    21: ("Surface technology, coating", "Chemistry"),
+    22: ("Micro-structural and nano-technology", "Chemistry"),
+    23: ("Chemical engineering", "Chemistry"),
+    24: ("Environmental technology", "Chemistry"),
+    25: ("Handling", "Mechanical engineering"),
+    26: ("Machine tools", "Mechanical engineering"),
+    27: ("Engines, pumps, turbines", "Mechanical engineering"),
+    28: ("Textile and paper machines", "Mechanical engineering"),
+    29: ("Other special machines", "Mechanical engineering"),
+    30: ("Thermal processes and apparatus", "Mechanical engineering"),
+    31: ("Mechanical elements", "Mechanical engineering"),
+    32: ("Transport", "Mechanical engineering"),
+    33: ("Furniture, games", "Other fields"),
+    34: ("Other consumer goods", "Other fields"),
+    35: ("Civil engineering", "Other fields"),
+}
+
+
+def render_parameter_block():
+    """Render the parameter block with Time → Geography → Technology → Action order.
+
+    Returns:
+        tuple: (year_start, year_end, jurisdictions, tech_field, run_clicked)
+    """
+    with st.container(border=True):
+        # Use columns for horizontal layout: Time | Geography | Technology | Action
+        col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+
+        with col1:
+            # Time: Year range slider
+            year_range = st.slider(
+                "Year Range",
+                min_value=1990,
+                max_value=2024,
+                value=(st.session_state.get('year_start', DEFAULT_YEAR_START),
+                       st.session_state.get('year_end', DEFAULT_YEAR_END)),
+                help="Select the filing year range for analysis"
+            )
+            year_start, year_end = year_range
+
+        with col2:
+            # Geography: Jurisdiction multiselect
+            jurisdictions = st.multiselect(
+                "Jurisdictions",
+                options=JURISDICTIONS,
+                default=st.session_state.get('jurisdictions', DEFAULT_JURISDICTIONS),
+                help="Select patent offices to include"
+            )
+            # Validation: warn if no jurisdictions selected
+            if not jurisdictions:
+                st.warning("Select at least one jurisdiction")
+
+        with col3:
+            # Technology: Tech field selectbox with sector grouping
+            tech_options = [None] + list(TECH_FIELDS.keys())
+            current_tech = st.session_state.get('tech_field', DEFAULT_TECH_FIELD)
+            default_index = 0 if current_tech is None else tech_options.index(current_tech)
+
+            tech_field = st.selectbox(
+                "Technology Field",
+                options=tech_options,
+                index=default_index,
+                format_func=lambda x: "All fields" if x is None else f"{TECH_FIELDS[x][0]} ({TECH_FIELDS[x][1]})",
+                help="Filter by WIPO technology field"
+            )
+
+        with col4:
+            # Action: Run button (with vertical spacing to align)
+            st.write("")  # Spacing to align with other controls
+            run_clicked = st.button("Run Analysis", type="primary", use_container_width=True)
+
+    # Update session state
+    st.session_state['year_start'] = year_start
+    st.session_state['year_end'] = year_end
+    st.session_state['jurisdictions'] = jurisdictions
+    st.session_state['tech_field'] = tech_field
+
+    return year_start, year_end, jurisdictions, tech_field, run_clicked
 
 # Popular queries for "Common Questions" section (AC #3)
 # Selection criteria: One query per category for balanced representation
@@ -145,12 +288,13 @@ def render_query_list(category_filter):
 
 
 def render_detail_page(query_id: str):
-    """Render detail page for a specific query (AC #4, #5).
+    """Render detail page for a specific query (Story 1.1 AC #4, #5, Story 1.2 AC #1).
 
     Displays:
     - Back button to return to landing page
+    - Parameter block with Time → Geography → Technology → Action (Story 1.2)
     - Query title and description
-    - Query execution interface (reuses render_query_panel logic)
+    - Query execution and results
 
     Args:
         query_id: The ID of the query to display (e.g., 'Q01')
@@ -160,9 +304,7 @@ def render_detail_page(query_id: str):
         go_to_landing()
         return  # Exit early since we're navigating
 
-    st.divider()
-
-    # Get query info
+    # Get query info first to check validity
     if query_id not in QUERIES:
         st.error(f"Query '{query_id}' not found.")
         return
@@ -184,6 +326,13 @@ def render_detail_page(query_id: str):
 
     # Query description
     st.markdown(f"**{query_info.get('description', '')}**")
+
+    ''  # Spacing
+
+    # Parameter block (Story 1.2 AC #1)
+    year_start, year_end, jurisdictions, tech_field, run_clicked = render_parameter_block()
+
+    ''  # Spacing
 
     # Show explanation in an expander
     if "explanation" in query_info:
@@ -210,12 +359,8 @@ def render_detail_page(query_id: str):
 
     st.divider()
 
-    # Execute button - requires BigQuery client
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        execute_button = st.button("Run Query", type="primary", key="exec_detail")
-
-    if execute_button:
+    # Execute when Run Analysis clicked (from parameter block)
+    if run_clicked:
         # Get or create client
         client = get_bigquery_client()
         if client is None:
@@ -298,7 +443,7 @@ def get_bigquery_client():
     return bigquery.Client(project=project)
 
 
-def run_query(client: bigquery.Client, query: str) -> tuple[pd.DataFrame, float]:
+def run_query(client, query):
     """Execute a query and return results as DataFrame with execution time."""
     project = os.getenv("BIGQUERY_PROJECT", "patstat-mtc")
     dataset = os.getenv("BIGQUERY_DATASET", "patstat")
