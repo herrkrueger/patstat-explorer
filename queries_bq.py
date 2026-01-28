@@ -22,6 +22,7 @@ QUERIES = {
     "Q01": {
         "title": "Database Statistics",
         "tags": ["PATLIB"],
+        "category": "Trends",
         "description": "Overall PATSTAT database statistics and key metrics",
         "explanation": """High-level statistics about the PATSTAT database:
 - Total number of patent applications
@@ -56,6 +57,7 @@ Essential for understanding the scope and coverage of the database.""",
     "Q02": {
         "title": "Filing Authorities",
         "tags": ["PATLIB"],
+        "category": "Regional",
         "description": "Patent offices (filing authorities) in the database with application counts",
         "explanation": """Shows all patent offices/filing authorities in PATSTAT with their application volumes.
 Helps understand which patent offices are represented and their relative importance.
@@ -84,6 +86,7 @@ EP = European Patent Office, US = USPTO, CN = CNIPA, etc.""",
     "Q03": {
         "title": "Applications by Year",
         "tags": ["PATLIB"],
+        "category": "Trends",
         "description": "Patent application trends over time (by filing year)",
         "explanation": """Shows the distribution of patent applications across filing years.
 Useful for understanding data coverage and identifying trends in global patent activity.
@@ -113,6 +116,7 @@ Note: Recent years may show lower counts due to publication delays (18 months fr
     "Q04": {
         "title": "Top IPC Classes",
         "tags": ["PATLIB"],
+        "category": "Technology",
         "description": "Most common IPC technology classes in the database",
         "explanation": """Shows the most frequently assigned IPC (International Patent Classification) classes.
 IPC classes indicate the technology area of a patent:
@@ -147,6 +151,7 @@ IPC classes indicate the technology area of a patent:
     "Q05": {
         "title": "Sample Patents",
         "tags": ["PATLIB"],
+        "category": "Technology",
         "description": "Sample of 100 patent applications with key fields",
         "explanation": """Returns a sample of patent applications to understand the data structure
 and available fields in the main application table (tls201_appln).
@@ -184,6 +189,7 @@ This is the central table in PATSTAT - most queries start here.""",
     "Q06": {
         "title": "Country Patent Activity",
         "tags": ["PATLIB", "BUSINESS"],
+        "category": "Competitors",
         "description": "Which countries have the highest patent application activity since 2015?",
         "explanation": """This query analyzes patent filing activity by applicant country since 2015,
 calculating both total applications and grant rates. It identifies which countries are most active
@@ -221,6 +227,7 @@ Minimum threshold of 100 patents ensures statistical relevance.""",
     "Q07": {
         "title": "Green Technology Trends",
         "tags": ["BUSINESS", "UNIVERSITY"],
+        "category": "Trends",
         "description": "Patent activity in G7+China+Korea with green technology (CPC Y02) focus",
         "explanation": """This query tracks patent activity trends in the G7+China+Korea economies,
 with a special focus on green/environmental technologies (CPC Y02 class).
@@ -264,6 +271,7 @@ Tracks both total applications and the proportion dedicated to green tech.""",
     "Q08": {
         "title": "Most Active Technology Fields",
         "tags": ["BUSINESS", "UNIVERSITY"],
+        "category": "Technology",
         "description": "Most active technology fields (2018-2022) with family size and citation impact",
         "explanation": """This query uses WIPO technology field classifications to identify the most
 active technology sectors. The weight filter (>0.5) ensures only primary
@@ -297,6 +305,7 @@ breadth (patent importance), while citation counts measure technical influence."
     "Q09": {
         "title": "AI-based ERP Patent Landscape",
         "tags": ["BUSINESS"],
+        "category": "Technology",
         "description": "AI-based enterprise resource planning (G06Q10 + G06N) landscape since 2018",
         "explanation": """This query analyzes the patent landscape for AI-based ERP by identifying
 applications with both G06Q10 (ERP/business methods) and G06N (AI/machine learning)
@@ -368,6 +377,7 @@ Identifies top applicants to monitor in this emerging technology intersection.""
     "Q10": {
         "title": "AI-Assisted Diagnostics Companies",
         "tags": ["BUSINESS", "UNIVERSITY"],
+        "category": "Competitors",
         "description": "Companies building patent portfolios in AI-assisted diagnostics (A61B + G06N)",
         "explanation": """This query identifies companies active in AI-assisted diagnostics by finding
 patents at the intersection of medical diagnosis (A61B) and artificial
@@ -453,6 +463,7 @@ established players in this field.""",
     "Q11": {
         "title": "Top Patent Applicants",
         "tags": ["BUSINESS"],
+        "category": "Competitors",
         "description": "Top patent applicants since 2010 with portfolio profile",
         "explanation": """This query identifies the most prolific patent applicants by standardized
 name (doc_std_name), showing their filing activity, grant success, and
@@ -493,6 +504,7 @@ Minimum threshold of 50 patents ensures focus on significant players.""",
     "Q12": {
         "title": "Competitor Filing Strategy (MedTech)",
         "tags": ["BUSINESS"],
+        "category": "Competitors",
         "description": "Where are major MedTech competitors filing their patents?",
         "explanation": """This query analyzes the geographic filing patterns of major MedTech competitors,
 focusing on EP (European Patent Office), US (USPTO), and CN (CNIPA) filings.
@@ -562,6 +574,7 @@ Stryker, Zimmer, Smith & Nephew, Edwards, Baxter, Fresenius, and B. Braun.""",
     "Q13": {
         "title": "Most Cited Patents (2020)",
         "tags": ["UNIVERSITY"],
+        "category": "Trends",
         "description": "Which patents were most frequently cited by applications filed in 2020?",
         "explanation": """This query builds a citation network to identify the most influential prior
 art patents. By focusing on 2020 citing applications, it shows which older
@@ -609,6 +622,7 @@ Minimum threshold of 10 citations ensures significance.""",
     "Q14": {
         "title": "Diagnostic Imaging Grant Rates",
         "tags": ["BUSINESS", "UNIVERSITY"],
+        "category": "Technology",
         "description": "Grant rates for diagnostic imaging patents (A61B 6/) at EPO vs USPTO vs CNIPA",
         "explanation": """This query analyzes grant rates for diagnostic imaging patents (IPC subclass A61B 6/)
 across three major patent offices. A61B 6/ covers diagnostic imaging technologies
@@ -663,6 +677,7 @@ Helps inform international filing strategy by showing office-specific grant succ
     "Q15": {
         "title": "German States - Medical Tech",
         "tags": ["PATLIB"],
+        "category": "Regional",
         "description": "Which German Federal states show highest patent activity in A61B (Diagnosis/Surgery)?",
         "explanation": """This query provides analysis of medical technology patent activity
 across German federal states using NUTS codes. It identifies regional
@@ -706,6 +721,7 @@ Uses main class A61B% - covers all medical diagnosis/surgery subclasses.""",
     "Q16": {
         "title": "German States - Per Capita Analysis",
         "tags": ["PATLIB"],
+        "category": "Regional",
         "description": "A61B patent activity by German federal state with per-capita comparison",
         "explanation": """This query analyzes patent activity in IPC class A61B (medical diagnosis/surgery)
 over the last 5 years, focusing on German federal states with per-capita comparison.
@@ -784,6 +800,7 @@ states of different sizes.""",
     "Q17": {
         "title": "Regional Tech Sector Comparison",
         "tags": ["PATLIB"],
+        "category": "Regional",
         "description": "Compare Sachsen, Bayern, Baden-Württemberg patent activity by WIPO technology sectors",
         "explanation": """This query compares patent activity across German federal states (Sachsen, Bayern,
 Baden-Württemberg) broken down by WIPO technology sectors. It helps regional
@@ -850,6 +867,7 @@ technology categorization across all patents.""",
     "Q18": {
         "title": "Fastest-Growing G06Q Subclasses",
         "tags": ["BUSINESS", "UNIVERSITY"],
+        "category": "Trends",
         "description": "Fastest-growing sub-classes within G06Q (IT methods for management) in 3 years",
         "explanation": """This query identifies the fastest-growing G06Q sub-classes by comparing
 filing activity between the base year (2021) and the most recent year (2023).

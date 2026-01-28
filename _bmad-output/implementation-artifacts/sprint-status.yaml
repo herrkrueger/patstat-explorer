@@ -42,7 +42,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # Epic 1: UI Transformation & Dynamic Queries
   epic-1: in-progress
-  1-1-landing-page-with-question-based-navigation: ready-for-dev
+  1-1-landing-page-with-question-based-navigation: done
   1-2-detail-page-layout-and-parameter-block: backlog
   1-3-query-execution-and-results-display: backlog
   1-4-insight-headlines-and-altair-visualization: backlog

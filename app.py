@@ -6,11 +6,259 @@ import os
 from dotenv import load_dotenv
 import time
 import json
-import math
-from queries_bq import QUERIES, STAKEHOLDERS, DYNAMIC_QUERIES, REFERENCE_QUERIES
+from queries_bq import QUERIES, STAKEHOLDERS
 
 # Load environment variables
 load_dotenv()
+
+
+# =============================================================================
+# SESSION STATE & NAVIGATION (Story 1.1)
+# =============================================================================
+
+def init_session_state():
+    """Initialize session state for page navigation.
+
+    Sets default values only if keys don't already exist.
+    - current_page: 'landing' or 'detail'
+    - selected_query: query ID when on detail page
+    - selected_category: preserves category filter across navigation
+    """
+    if 'current_page' not in st.session_state:
+        st.session_state['current_page'] = 'landing'
+    if 'selected_query' not in st.session_state:
+        st.session_state['selected_query'] = None
+    if 'selected_category' not in st.session_state:
+        st.session_state['selected_category'] = None
+
+
+def go_to_landing():
+    """Navigate to landing page, preserving category selection (AC #5)."""
+    st.session_state['current_page'] = 'landing'
+    st.session_state['selected_query'] = None
+    # Keep selected_category for state restoration
+    st.rerun()
+
+
+def go_to_detail(query_id: str):
+    """Navigate to detail page for a specific query (AC #4).
+
+    Args:
+        query_id: Must be a valid key in QUERIES dict
+    """
+    if query_id not in QUERIES:
+        return  # Invalid query_id, don't navigate
+    st.session_state['current_page'] = 'detail'
+    st.session_state['selected_query'] = query_id
+    st.rerun()
+
+
+# Category definitions for landing page pills (AC #1)
+CATEGORIES = ["Competitors", "Trends", "Regional", "Technology"]
+
+# Popular queries for "Common Questions" section (AC #3)
+# Selection criteria: One query per category for balanced representation
+# - Q06: Competitors (Country Patent Activity)
+# - Q07: Trends (Green Technology Trends)
+# - Q08: Technology (Most Active Technology Fields)
+# - Q11: Competitors (Top Patent Applicants)
+# - Q15: Regional (German States - Medical Tech)
+COMMON_QUESTIONS = ["Q06", "Q07", "Q08", "Q11", "Q15"]
+
+
+def render_landing_page():
+    """Render the landing page with category pills and query list (AC #1, #2, #3).
+
+    Displays:
+    - Title: "What do you want to know?"
+    - Category pills for filtering
+    - Common Questions section with popular queries
+    - Full query list filtered by selected category
+    """
+    # Page title (AC #1)
+    st.header("What do you want to know?")
+
+    ''  # Spacing
+
+    # Category pills (AC #1, #2)
+    selected = st.pills(
+        "Categories",
+        options=CATEGORIES,
+        default=st.session_state.get('selected_category'),
+        selection_mode="single",
+        key="category_pills"
+    )
+
+    # Update session state if category changed
+    if selected != st.session_state.get('selected_category'):
+        st.session_state['selected_category'] = selected
+
+    ''  # Spacing
+
+    # Common Questions section (AC #3)
+    st.subheader("Common Questions")
+
+    cols = st.columns(len(COMMON_QUESTIONS))
+    for i, query_id in enumerate(COMMON_QUESTIONS):
+        if query_id in QUERIES:
+            query_info = QUERIES[query_id]
+            with cols[i]:
+                # Display as clickable card with question-style title
+                if st.button(
+                    query_info['title'],
+                    key=f"common_{query_id}",
+                    use_container_width=True
+                ):
+                    go_to_detail(query_id)
+
+    ''  # Spacing
+    st.divider()
+
+    # Full query list with filtering (AC #2)
+    render_query_list(selected)
+
+
+def render_query_list(category_filter):
+    """Render query list filtered by category (AC #2).
+
+    Args:
+        category_filter: Category name to filter by, or None for all queries
+    """
+    filtered_queries = QUERIES
+    if category_filter:
+        filtered_queries = {
+            qid: qinfo for qid, qinfo in QUERIES.items()
+            if qinfo.get("category") == category_filter
+        }
+
+    if not filtered_queries:
+        st.info(f"No queries in category: {category_filter}")
+        return
+
+    for query_id, query_info in filtered_queries.items():
+        if st.button(
+            f"{query_id}: {query_info['title']}",
+            key=f"query_{query_id}",
+            use_container_width=True
+        ):
+            go_to_detail(query_id)
+
+
+def render_detail_page(query_id: str):
+    """Render detail page for a specific query (AC #4, #5).
+
+    Displays:
+    - Back button to return to landing page
+    - Query title and description
+    - Query execution interface (reuses render_query_panel logic)
+
+    Args:
+        query_id: The ID of the query to display (e.g., 'Q01')
+    """
+    # Back button (AC #4, #5)
+    if st.button("← Back to Questions", key="back_to_landing"):
+        go_to_landing()
+        return  # Exit early since we're navigating
+
+    st.divider()
+
+    # Get query info
+    if query_id not in QUERIES:
+        st.error(f"Query '{query_id}' not found.")
+        return
+
+    query_info = QUERIES[query_id]
+
+    # Header with ID and title
+    st.header(f"{query_id}: {query_info['title']}")
+
+    # Tags as pills
+    tag_colors = {"PATLIB": "#1f77b4", "BUSINESS": "#2ca02c", "UNIVERSITY": "#9467bd"}
+    tags_html = " ".join([
+        f'<span style="background-color: {tag_colors.get(t, "#666")}; '
+        f'color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.85em; margin-right: 6px;">{t}</span>'
+        for t in query_info.get("tags", [])
+    ])
+    st.markdown(tags_html, unsafe_allow_html=True)
+    st.markdown("")
+
+    # Query description
+    st.markdown(f"**{query_info.get('description', '')}**")
+
+    # Show explanation in an expander
+    if "explanation" in query_info:
+        with st.expander("Details", expanded=False):
+            st.markdown(query_info["explanation"])
+
+            if "key_outputs" in query_info:
+                st.markdown("**Key Outputs:**")
+                for output in query_info["key_outputs"]:
+                    st.markdown(f"- {output}")
+
+    # Show estimated time
+    estimated_cached = query_info.get("estimated_seconds_cached", 0)
+    estimated_first = query_info.get("estimated_seconds_first_run", estimated_cached)
+    if estimated_first > 0:
+        if estimated_first != estimated_cached:
+            st.caption(f"Estimated: ~{format_time(estimated_cached)} (cached) / ~{format_time(estimated_first)} (first run)")
+        else:
+            st.caption(f"Estimated: ~{format_time(estimated_cached)}")
+
+    # Show the SQL query in an expander
+    with st.expander("View SQL Query", expanded=False):
+        st.code(query_info["sql"], language="sql")
+
+    st.divider()
+
+    # Execute button - requires BigQuery client
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        execute_button = st.button("Run Query", type="primary", key="exec_detail")
+
+    if execute_button:
+        # Get or create client
+        client = get_bigquery_client()
+        if client is None:
+            st.error("Could not connect to BigQuery.")
+            return
+
+        estimated_seconds = query_info.get("estimated_seconds_cached", 1)
+        with st.spinner(f"Running query... (~{format_time(estimated_seconds)})"):
+            try:
+                df, execution_time = run_query(client, query_info["sql"])
+
+                # Show results metrics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Rows", f"{len(df):,}")
+                with col2:
+                    st.metric("Execution time", format_time(execution_time))
+                with col3:
+                    if estimated_seconds > 0:
+                        diff = execution_time - estimated_seconds
+                        delta_str = f"{'+' if diff > 0 else ''}{format_time(abs(diff))}"
+                        st.metric("vs. Estimate", delta_str,
+                                 delta=f"{'slower' if diff > 0 else 'faster'}",
+                                 delta_color="inverse")
+
+                st.divider()
+
+                # Display dataframe
+                st.dataframe(df, use_container_width=True, height=400)
+
+                # Download button
+                csv = df.to_csv(index=False)
+                filename = f"{query_id}_{query_info['title'].lower().replace(' ', '_').replace('-', '_')}.csv"
+                st.download_button(
+                    label="Download CSV",
+                    data=csv,
+                    file_name=filename,
+                    mime="text/csv",
+                    key="download_detail"
+                )
+
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
 # Page config
 st.set_page_config(
@@ -78,440 +326,34 @@ def format_time(seconds: float) -> str:
         return f"{minutes}m {secs:.0f}s"
 
 
-def get_filtered_queries(stakeholder_filter: str) -> dict:
-    """Filter queries by stakeholder tag."""
-    if stakeholder_filter == "Alle":
-        return QUERIES
-    return {
-        qid: qinfo for qid, qinfo in QUERIES.items()
-        if stakeholder_filter in qinfo.get("tags", [])
-    }
-
-
-@st.cache_data(ttl=3600)
-def load_reference_data(_client: bigquery.Client, ref_type: str) -> pd.DataFrame:
-    """Load reference data for dynamic query dropdowns."""
-    if ref_type not in REFERENCE_QUERIES:
-        return pd.DataFrame()
-
-    project = os.getenv("BIGQUERY_PROJECT", "patstat-mtc")
-    dataset = os.getenv("BIGQUERY_DATASET", "patstat")
-
-    job_config = bigquery.QueryJobConfig(
-        default_dataset=f"{project}.{dataset}"
-    )
-
-    try:
-        return _client.query(REFERENCE_QUERIES[ref_type], job_config=job_config).to_dataframe()
-    except Exception as e:
-        st.error(f"Error loading reference data: {e}")
-        return pd.DataFrame()
-
-
-def run_dynamic_query(client: bigquery.Client, query_id: str, params: dict) -> tuple[pd.DataFrame, float]:
-    """Execute a dynamic query with user-provided parameters."""
-    if query_id not in DYNAMIC_QUERIES:
-        return pd.DataFrame(), 0.0
-
-    query_info = DYNAMIC_QUERIES[query_id]
-    sql_template = query_info["sql_template"]
-
-    project = os.getenv("BIGQUERY_PROJECT", "patstat-mtc")
-    dataset = os.getenv("BIGQUERY_DATASET", "patstat")
-
-    # Build query parameters for BigQuery
-    query_params = [
-        bigquery.ArrayQueryParameter("jurisdictions", "STRING", params.get("jurisdictions", ["EP"])),
-        bigquery.ScalarQueryParameter("tech_field", "INT64", params.get("tech_field", 13)),
-        bigquery.ScalarQueryParameter("year_start", "INT64", params.get("year_start", 2015)),
-        bigquery.ScalarQueryParameter("year_end", "INT64", params.get("year_end", 2023)),
-    ]
-
-    job_config = bigquery.QueryJobConfig(
-        default_dataset=f"{project}.{dataset}",
-        query_parameters=query_params
-    )
-
-    start_time = time.time()
-    result = client.query(sql_template, job_config=job_config).to_dataframe()
-    execution_time = time.time() - start_time
-    return result, execution_time
-
-
-def render_interactive_panel(client: bigquery.Client):
-    """Render the interactive analysis panel with dynamic parameters."""
-    # Load reference data
-    jurisdictions_df = load_reference_data(client, "JURISDICTIONS")
-    tech_fields_df = load_reference_data(client, "TECH_FIELDS")
-
-    if jurisdictions_df.empty or tech_fields_df.empty:
-        st.warning("Could not load reference data. Please try again.")
-        return
-
-    # Get query info
-    query_info = DYNAMIC_QUERIES["DQ01"]
-
-    # Header with clean divider style
-    st.header(query_info['title'], divider='gray')
-
-    st.markdown(f"*{query_info['description']}*")
-
-    ''  # Spacing
-
-    # Year range slider first (like GDP example)
-    year_params = query_info["parameters"]["year_range"]
-    year_start, year_end = st.slider(
-        "Which years are you interested in?",
-        min_value=year_params["min"],
-        max_value=year_params["max"],
-        value=tuple(year_params["default"]),
-        help=year_params["description"]
-    )
-
-    # Jurisdiction multiselect (like GDP country selector)
-    jurisdiction_options = {
-        row['code']: f"{row['name']} ({row['code']})"
-        for _, row in jurisdictions_df.iterrows()
-    }
-    # Default jurisdictions
-    default_jurisdictions = ["EP", "US", "CN"]
-    available_defaults = [j for j in default_jurisdictions if j in jurisdiction_options]
-
-    selected_jurisdictions = st.multiselect(
-        "Which jurisdictions would you like to compare?",
-        options=list(jurisdiction_options.keys()),
-        default=available_defaults,
-        format_func=lambda x: jurisdiction_options[x],
-        help=query_info["parameters"]["jurisdictions"]["description"]
-    )
-
-    if not selected_jurisdictions:
-        st.warning("Select at least one jurisdiction")
-
-    ''  # Spacing
-
-    # Tech field dropdown - grouped by sector
-    tech_field_options = {
-        row['code']: f"{row['name']} ({row['sector']})"
-        for _, row in tech_fields_df.iterrows()
-    }
-    # Find default (Medical technology = 13)
-    default_tech = 13 if 13 in tech_field_options else list(tech_field_options.keys())[0]
-
-    selected_tech_field = st.selectbox(
-        "Technology Field",
-        options=list(tech_field_options.keys()),
-        index=list(tech_field_options.keys()).index(default_tech),
-        format_func=lambda x: tech_field_options[x],
-        help=query_info["parameters"]["tech_field"]["description"]
-    )
-
-    ''  # Spacing
-
-    # Show explanation
-    with st.expander("About this analysis", expanded=False):
-        st.markdown(query_info["explanation"])
-        if "key_outputs" in query_info:
-            st.markdown("**Key Outputs:**")
-            for output in query_info["key_outputs"]:
-                st.markdown(f"- {output}")
-
-    # Show SQL query (like other tabs)
-    with st.expander("View SQL Query", expanded=False):
-        # Show the template with parameter placeholders replaced for clarity
-        # Note: IN UNNEST(@array) is BigQuery syntax for array parameters
-        jurisdictions_list = ', '.join(f"'{j}'" for j in selected_jurisdictions) if selected_jurisdictions else "'EP'"
-        display_sql = query_info["sql_template"].replace(
-            "IN UNNEST(@jurisdictions)", f"IN ({jurisdictions_list})"
-        ).replace(
-            "@tech_field", str(selected_tech_field)
-        ).replace(
-            "@year_start", str(year_start)
-        ).replace(
-            "@year_end", str(year_end)
-        )
-        st.code(display_sql, language="sql")
-
-    ''
-    ''
-
-    # Execute button with estimated time
-    estimated = query_info.get("estimated_seconds_cached", 2)
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        execute_button = st.button(
-            "Run Analysis",
-            type="primary",
-            key="run_interactive",
-            disabled=not selected_jurisdictions
-        )
-    with col2:
-        st.caption(f"Estimated: ~{format_time(estimated)}")
-
-    if execute_button:
-        params = {
-            "jurisdictions": selected_jurisdictions,
-            "tech_field": selected_tech_field,
-            "year_start": year_start,
-            "year_end": year_end
-        }
-
-        tech_label = tech_field_options[selected_tech_field].split(' (')[0]
-        jurisdictions_str = ', '.join(selected_jurisdictions)
-
-        with st.spinner(f"Analyzing {jurisdictions_str} patents in {tech_label}..."):
-            try:
-                df, execution_time = run_dynamic_query(client, "DQ01", params)
-
-                if df.empty:
-                    st.warning("No data found for the selected parameters.")
-                    return
-
-                ''
-                ''
-
-                # Line chart (like GDP example - color by jurisdiction)
-                st.header("Trend over time", divider='gray')
-
-                ''
-
-                st.line_chart(
-                    df,
-                    x="year",
-                    y="application_count",
-                    color="jurisdiction",
-                )
-
-                ''
-                ''
-
-                # Dynamic metrics per jurisdiction (like GDP example)
-                st.header(f"Applications in {year_end}", divider='gray')
-
-                ''
-
-                # Get first and last year data for delta calculation
-                first_year_df = df[df['year'] == year_start]
-                last_year_df = df[df['year'] == year_end]
-
-                cols = st.columns(4)
-                for i, jurisdiction in enumerate(selected_jurisdictions):
-                    col = cols[i % len(cols)]
-
-                    with col:
-                        first_count = first_year_df[first_year_df['jurisdiction'] == jurisdiction]['application_count']
-                        last_count = last_year_df[last_year_df['jurisdiction'] == jurisdiction]['application_count']
-
-                        first_val = first_count.iloc[0] if len(first_count) > 0 else 0
-                        last_val = last_count.iloc[0] if len(last_count) > 0 else 0
-
-                        # Handle NaN values
-                        if math.isnan(first_val):
-                            first_val = 0
-                        if math.isnan(last_val):
-                            last_val = 0
-
-                        if first_val == 0:
-                            growth = 'n/a'
-                            delta_color = 'off'
-                        else:
-                            growth = f'{last_val / first_val:,.2f}x'
-                            delta_color = 'normal'
-
-                        st.metric(
-                            label=f'{jurisdiction}',
-                            value=f'{last_val:,.0f}',
-                            delta=growth,
-                            delta_color=delta_color
-                        )
-
-                ''
-                ''
-
-                # Summary metrics
-                cols = st.columns(3)
-                with cols[0]:
-                    st.metric("Total Applications", f"{df['application_count'].sum():,}")
-                with cols[1]:
-                    st.metric("Unique Inventions", f"{df['invention_count'].sum():,}")
-                with cols[2]:
-                    st.metric("Execution Time", format_time(execution_time))
-
-                ''
-                ''
-
-                # Data table
-                st.header("Data", divider='gray')
-
-                ''
-
-                st.dataframe(df, use_container_width=True)
-
-                ''
-
-                # Download button
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=f"trend_{'_'.join(selected_jurisdictions)}_{selected_tech_field}_{year_start}-{year_end}.csv",
-                    mime="text/csv"
-                )
-
-            except Exception as e:
-                st.error(f"Error executing query: {str(e)}")
-
-
-def render_query_panel(filtered_queries: dict, client, tab_key: str):
-    """Render the query selection and execution panel."""
-    if not filtered_queries:
-        st.info("No queries in this category.")
-        return
-
-    # Query selection
-    query_options = {
-        qid: f"{qid} - {qinfo['title']}"
-        for qid, qinfo in filtered_queries.items()
-    }
-
-    selected_query_id = st.selectbox(
-        "Select Query",
-        options=list(query_options.keys()),
-        format_func=lambda x: query_options[x],
-        key=f"query_select_{tab_key}"
-    )
-
-    if selected_query_id:
-        query_info = QUERIES[selected_query_id]
-
-        st.divider()
-
-        # Header with ID and title
-        st.header(f"{selected_query_id}: {query_info['title']}")
-
-        # Tags as pills
-        tag_colors = {"PATLIB": "#1f77b4", "BUSINESS": "#2ca02c", "UNIVERSITY": "#9467bd"}
-        tags_html = " ".join([
-            f'<span style="background-color: {tag_colors.get(t, "#666")}; '
-            f'color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.85em; margin-right: 6px;">{t}</span>'
-            for t in query_info.get("tags", [])
-        ])
-        st.markdown(tags_html, unsafe_allow_html=True)
-        st.markdown("")
-
-        # Query description
-        st.markdown(f"**{query_info.get('description', '')}**")
-
-        # Show explanation in an expander
-        if "explanation" in query_info:
-            with st.expander("Details", expanded=False):
-                st.markdown(query_info["explanation"])
-
-                if "key_outputs" in query_info:
-                    st.markdown("**Key Outputs:**")
-                    for output in query_info["key_outputs"]:
-                        st.markdown(f"- {output}")
-
-        # Show estimated time
-        estimated_cached = query_info.get("estimated_seconds_cached", 0)
-        estimated_first = query_info.get("estimated_seconds_first_run", estimated_cached)
-        estimated_seconds = estimated_cached
-        if estimated_first > 0:
-            if estimated_first != estimated_cached:
-                st.caption(f"Estimated: ~{format_time(estimated_cached)} (cached) / ~{format_time(estimated_first)} (first run)")
-            else:
-                st.caption(f"Estimated: ~{format_time(estimated_cached)}")
-
-        # Show the SQL query in an expander
-        with st.expander("View SQL Query", expanded=False):
-            st.code(query_info["sql"], language="sql")
-
-        st.divider()
-
-        # Execute button
-        col1, col2 = st.columns([1, 5])
-        with col1:
-            execute_button = st.button("Run Query", type="primary", key=f"exec_{tab_key}")
-
-        if execute_button:
-            with st.spinner(f"Running query... (~{format_time(estimated_seconds)})"):
-                try:
-                    df, execution_time = run_query(client, query_info["sql"])
-
-                    # Show results metrics
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Rows", f"{len(df):,}")
-                    with col2:
-                        st.metric("Execution time", format_time(execution_time))
-                    with col3:
-                        if estimated_seconds > 0:
-                            diff = execution_time - estimated_seconds
-                            delta_str = f"{'+' if diff > 0 else ''}{format_time(abs(diff))}"
-                            st.metric("vs. Estimate", delta_str,
-                                     delta=f"{'slower' if diff > 0 else 'faster'}",
-                                     delta_color="inverse")
-
-                    st.divider()
-
-                    # Display dataframe
-                    st.dataframe(df, use_container_width=True, height=400)
-
-                    # Download button
-                    csv = df.to_csv(index=False)
-                    filename = f"{selected_query_id}_{query_info['title'].lower().replace(' ', '_').replace('-', '_')}.csv"
-                    st.download_button(
-                        label="Download CSV",
-                        data=csv,
-                        file_name=filename,
-                        mime="text/csv",
-                        key=f"download_{tab_key}"
-                    )
-
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-
-
 def main():
+    """Main application entry point with session-state based routing (Story 1.1).
+
+    Routes between:
+    - Landing page: Category pills + query list + common questions
+    - Detail page: Query parameters + execution + results
+    """
+    # Initialize session state for navigation
+    init_session_state()
+
     client = get_bigquery_client()
 
     if client is None:
         st.stop()
 
-    # Create tabs - Interactive Analysis first for visibility
-    tab_labels = [
-        "🔍 Interactive",
-        f"Alle ({len(QUERIES)})",
-        f"PATLIB ({len(get_filtered_queries('PATLIB'))})",
-        f"BUSINESS ({len(get_filtered_queries('BUSINESS'))})",
-        f"UNIVERSITY ({len(get_filtered_queries('UNIVERSITY'))})"
-    ]
-
-    tabs = st.tabs(tab_labels)
-
-    # Tab: Interactive Analysis (NEW)
-    with tabs[0]:
-        st.caption("Dynamic patent analysis with customizable parameters")
-        render_interactive_panel(client)
-
-    # Tab: Alle
-    with tabs[1]:
-        render_query_panel(QUERIES, client, "alle")
-
-    # Tab: PATLIB
-    with tabs[2]:
-        st.caption(STAKEHOLDERS["PATLIB"])
-        render_query_panel(get_filtered_queries("PATLIB"), client, "patlib")
-
-    # Tab: BUSINESS
-    with tabs[3]:
-        st.caption(STAKEHOLDERS["BUSINESS"])
-        render_query_panel(get_filtered_queries("BUSINESS"), client, "business")
-
-    # Tab: UNIVERSITY
-    with tabs[4]:
-        st.caption(STAKEHOLDERS["UNIVERSITY"])
-        render_query_panel(get_filtered_queries("UNIVERSITY"), client, "university")
+    # Route based on current_page session state (Task 6)
+    if st.session_state.get('current_page') == 'detail':
+        # Detail page: Show selected query (AC #4)
+        query_id = st.session_state.get('selected_query')
+        if query_id:
+            render_detail_page(query_id)
+        else:
+            # Fallback to landing if no query selected
+            st.session_state['current_page'] = 'landing'
+            render_landing_page()
+    else:
+        # Landing page: Show categories and query list (AC #1, #2, #3)
+        render_landing_page()
 
 
 if __name__ == "__main__":

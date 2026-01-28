@@ -1,6 +1,6 @@
 # Story 1.1: Landing Page with Question-Based Navigation
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -37,40 +37,40 @@ so that I can quickly find the right analysis without learning technical query n
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Implement session state for page navigation (AC: #1, #4, #5)
-  - [ ] 1.1 Add `st.session_state['current_page']` to track 'landing' vs 'detail'
-  - [ ] 1.2 Add `st.session_state['selected_query']` to track which query is selected
-  - [ ] 1.3 Add `st.session_state['selected_category']` to preserve category filter
-  - [ ] 1.4 Create navigation functions: `go_to_landing()`, `go_to_detail(query_id)`
+- [x] Task 1: Implement session state for page navigation (AC: #1, #4, #5)
+  - [x] 1.1 Add `st.session_state['current_page']` to track 'landing' vs 'detail'
+  - [x] 1.2 Add `st.session_state['selected_query']` to track which query is selected
+  - [x] 1.3 Add `st.session_state['selected_category']` to preserve category filter
+  - [x] 1.4 Create navigation functions: `go_to_landing()`, `go_to_detail(query_id)`
 
-- [ ] Task 2: Create landing page layout (AC: #1, #2, #3)
-  - [ ] 2.1 Remove current tab-based navigation from `main()`
-  - [ ] 2.2 Create `render_landing_page()` function
-  - [ ] 2.3 Add page title "What do you want to know?" using `st.header()`
-  - [ ] 2.4 Implement category pills using `st.pills()` component
-  - [ ] 2.5 Create "Common Questions" section with 3-5 hardcoded popular queries
+- [x] Task 2: Create landing page layout (AC: #1, #2, #3)
+  - [x] 2.1 Remove current tab-based navigation from `main()` (done in Task 6)
+  - [x] 2.2 Create `render_landing_page()` function
+  - [x] 2.3 Add page title "What do you want to know?" using `st.header()`
+  - [x] 2.4 Implement category pills using `st.pills()` component
+  - [x] 2.5 Create "Common Questions" section with 3-5 hardcoded popular queries
 
-- [ ] Task 3: Add query categories to queries_bq.py (AC: #2)
-  - [ ] 3.1 Add `"category"` field to each query in QUERIES dict
-  - [ ] 3.2 Categories: "Competitors", "Trends", "Regional", "Technology"
-  - [ ] 3.3 Assign appropriate category to all 18 existing queries
+- [x] Task 3: Add query categories to queries_bq.py (AC: #2)
+  - [x] 3.1 Add `"category"` field to each query in QUERIES dict
+  - [x] 3.2 Categories: "Competitors", "Trends", "Regional", "Technology"
+  - [x] 3.3 Assign appropriate category to all 18 existing queries
 
-- [ ] Task 4: Implement query list with filtering (AC: #2, #3)
-  - [ ] 4.1 Create `render_query_list(category_filter)` function
-  - [ ] 4.2 Display queries as clickable cards with title as question
-  - [ ] 4.3 Filter queries based on selected category pill
-  - [ ] 4.4 Add click handler to navigate to detail page
+- [x] Task 4: Implement query list with filtering (AC: #2, #3)
+  - [x] 4.1 Create `render_query_list(category_filter)` function
+  - [x] 4.2 Display queries as clickable cards with title as question
+  - [x] 4.3 Filter queries based on selected category pill
+  - [x] 4.4 Add click handler to navigate to detail page
 
-- [ ] Task 5: Create detail page wrapper (AC: #4, #5)
-  - [ ] 5.1 Create `render_detail_page(query_id)` function
-  - [ ] 5.2 Add "← Back to Questions" button at top
-  - [ ] 5.3 Integrate existing query execution logic from `render_query_panel()`
-  - [ ] 5.4 Preserve parameters when navigating back
+- [x] Task 5: Create detail page wrapper (AC: #4, #5)
+  - [x] 5.1 Create `render_detail_page(query_id)` function
+  - [x] 5.2 Add "← Back to Questions" button at top
+  - [x] 5.3 Integrate existing query execution logic from `render_query_panel()`
+  - [x] 5.4 Preserve parameters when navigating back
 
-- [ ] Task 6: Update main() routing logic (AC: #1, #4, #5)
-  - [ ] 6.1 Replace tabs with conditional rendering based on session state
-  - [ ] 6.2 Route to landing page when `current_page == 'landing'`
-  - [ ] 6.3 Route to detail page when `current_page == 'detail'`
+- [x] Task 6: Update main() routing logic (AC: #1, #4, #5)
+  - [x] 6.1 Replace tabs with conditional rendering based on session state
+  - [x] 6.2 Route to landing page when `current_page == 'landing'`
+  - [x] 6.3 Route to detail page when `current_page == 'detail'`
 
 ## Dev Notes
 
@@ -150,16 +150,36 @@ if st.button("← Back to Questions"):
 
 ### Agent Model Used
 
-(To be filled by dev agent)
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 
-(To be filled during implementation)
+- All 28 unit tests passing
+- Red-green-refactor cycle followed for each task
 
 ### Completion Notes List
 
-(To be filled by dev agent)
+1. **Task 1**: Implemented session state navigation with `init_session_state()`, `go_to_landing()`, `go_to_detail()` functions
+2. **Task 2**: Created `render_landing_page()` with "What do you want to know?" title, category pills, and Common Questions section
+3. **Task 3**: Added `category` field to all 18 queries in QUERIES dict (Competitors, Trends, Regional, Technology)
+4. **Task 4**: Created `render_query_list()` with category filtering support
+5. **Task 5**: Created `render_detail_page()` with back button and query execution logic
+6. **Task 6**: Updated `main()` to use session-state based routing, removing tab navigation
+
+### Code Review Fixes Applied
+
+- **H1**: Removed 330+ lines of dead code (render_interactive_panel, render_query_panel, load_reference_data, run_dynamic_query, get_filtered_queries)
+- **H2**: Removed misleading TODO comment from render_query_list
+- **M2**: Added input validation to go_to_detail() - now validates query_id exists in QUERIES
+- **M3**: Added test for invalid query_id handling (test_go_to_detail_validates_query_id)
+- **L2**: Added documentation explaining COMMON_QUESTIONS selection criteria
+- Cleaned up unused imports (math, DYNAMIC_QUERIES, REFERENCE_QUERIES)
 
 ### File List
 
-(To be filled by dev agent - files created/modified)
+**Modified:**
+- app.py - Added navigation functions, landing page, detail page, updated main() routing, removed dead code
+- queries_bq.py - Added category field to all 18 queries
+
+**Created:**
+- test_app_navigation.py - 29 unit tests for navigation, landing page, categories, filtering, detail page, and routing
