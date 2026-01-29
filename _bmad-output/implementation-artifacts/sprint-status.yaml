@@ -49,7 +49,7 @@ development_status:
   1-5-export-and-download-functionality: done
   1-6-sql-transparency-features: done
   1-7-convert-all-static-queries-to-dynamic: done
-  1-8-implement-query-specific-parameter-system: done  # Code review complete 2026-01-29
+  1-8-implement-query-specific-parameter-system: done  # 2026-01-29: Refinement + code review complete
   epic-1-retrospective: optional
 
   # Epic 2: Query Library Expansion

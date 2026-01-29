@@ -221,7 +221,20 @@ class TestQueryParameters:
                     assert options is not None, \
                         f"{qid}.{param_name} missing options"
                     # Options can be a list or a reference string
-                    valid_refs = {'jurisdictions', 'wipo_fields'}
+                    valid_refs = {'jurisdictions', 'wipo_fields', 'tech_sectors', 'medtech_competitors'}
+                    assert isinstance(options, list) or options in valid_refs, \
+                        f"{qid}.{param_name} has invalid options: {options}"
+
+    def test_select_has_options(self):
+        """select parameters have options defined."""
+        for qid, query in QUERIES.items():
+            for param_name, param_config in query.get('parameters', {}).items():
+                if param_config.get('type') == 'select':
+                    options = param_config.get('options')
+                    assert options is not None, \
+                        f"{qid}.{param_name} missing options"
+                    # Options can be a list or a reference string
+                    valid_refs = {'jurisdictions', 'wipo_fields', 'tech_sectors', 'medtech_competitors'}
                     assert isinstance(options, list) or options in valid_refs, \
                         f"{qid}.{param_name} has invalid options: {options}"
 
@@ -231,7 +244,7 @@ class TestQueryParameters:
             "Q05 should have no parameters (empty dict)"
 
     def test_parameters_match_sql_template(self):
-        """Queries with year_range param use @year_start/@year_end in sql_template (AC #4)."""
+        """Queries with parameters must use them in sql_template (AC #4)."""
         for qid, query in QUERIES.items():
             params = query.get('parameters', {})
             sql_template = query.get('sql_template', '')
@@ -243,6 +256,22 @@ class TestQueryParameters:
             if 'jurisdictions' in params:
                 assert '@jurisdictions' in sql_template, \
                     f"{qid} has jurisdictions param but sql_template doesn't use it"
+
+            if 'tech_sector' in params:
+                assert '@tech_sector' in sql_template, \
+                    f"{qid} has tech_sector param but sql_template doesn't use it"
+
+            if 'applicant_name' in params:
+                assert '@applicant_name' in sql_template, \
+                    f"{qid} has applicant_name param but sql_template doesn't use it"
+
+            if 'competitors' in params:
+                assert '@competitors' in sql_template, \
+                    f"{qid} has competitors param but sql_template doesn't use it"
+
+            if 'ipc_class' in params:
+                assert '@ipc_class' in sql_template, \
+                    f"{qid} has ipc_class param but sql_template doesn't use it"
 
     def test_parameter_count_reasonable(self):
         """Each query has 0-4 parameters typically (AC #5)."""

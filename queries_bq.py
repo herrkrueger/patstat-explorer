@@ -300,7 +300,8 @@ IPC classes indicate the technology area of a patent:
         "explanation": """Returns a sample of patent applications to understand the data structure
 and available fields in the main application table (tls201_appln).
 
-This is the central table in PATSTAT - most queries start here.""",
+This is the central table in PATSTAT - most queries start here.
+No parameters needed - this shows recent sample data.""",
         "key_outputs": [
             "Application IDs and dates",
             "Filing authority codes",
@@ -338,8 +339,7 @@ This is the central table in PATSTAT - most queries start here.""",
                 nb_citing_docdb_fam,
                 earliest_filing_date
             FROM tls201_appln
-            WHERE appln_filing_year BETWEEN @year_start AND @year_end
-              AND appln_auth IN UNNEST(@jurisdictions)
+            WHERE appln_filing_year >= 2020
             LIMIT 100
         """
     },
@@ -520,6 +520,13 @@ Tracks both total applications and the proportion dedicated to green tech.""",
                 "options": "jurisdictions",
                 "defaults": ["EP", "US", "CN"],
                 "required": True
+            },
+            "tech_sector": {
+                "type": "select",
+                "label": "Technology Sector",
+                "options": ["All Sectors", "Electrical engineering", "Instruments", "Chemistry", "Mechanical engineering", "Other fields"],
+                "defaults": "All Sectors",
+                "required": False
             }
         },
         "explanation": """This query uses WIPO technology field classifications to identify the most
@@ -562,6 +569,7 @@ breadth (patent importance), while citation counts measure technical influence."
             WHERE a.appln_filing_year BETWEEN @year_start AND @year_end
               AND atf.weight > 0.5
               AND a.appln_auth IN UNNEST(@jurisdictions)
+              AND (@tech_sector = 'All Sectors' OR tf.techn_sector = @tech_sector)
             GROUP BY tf.techn_sector, tf.techn_field
             ORDER BY application_count DESC
             LIMIT 15
@@ -891,6 +899,13 @@ established players in this field.""",
                 "options": "jurisdictions",
                 "defaults": ["EP", "US", "CN"],
                 "required": True
+            },
+            "applicant_name": {
+                "type": "text",
+                "label": "Applicant Name Filter",
+                "defaults": "",
+                "placeholder": "e.g., Samsung, Siemens (leave empty for all)",
+                "required": False
             }
         },
         "explanation": """This query identifies the most prolific patent applicants by standardized
@@ -943,8 +958,9 @@ Minimum threshold of 50 patents ensures focus on significant players.""",
               AND p.doc_std_name IS NOT NULL
               AND a.appln_filing_year BETWEEN @year_start AND @year_end
               AND a.appln_auth IN UNNEST(@jurisdictions)
+              AND (@applicant_name = '' OR LOWER(p.doc_std_name) LIKE CONCAT('%', LOWER(@applicant_name), '%'))
             GROUP BY p.doc_std_name, p.person_ctry_code
-            HAVING COUNT(DISTINCT a.appln_id) >= 50
+            HAVING COUNT(DISTINCT a.appln_id) >= CASE WHEN @applicant_name = '' THEN 50 ELSE 1 END
             ORDER BY total_applications DESC
             LIMIT 25
         """
@@ -968,6 +984,13 @@ Minimum threshold of 50 patents ensures focus on significant players.""",
                 "label": "Patent Offices to Compare",
                 "options": "jurisdictions",
                 "defaults": ["EP", "US", "CN"],
+                "required": True
+            },
+            "competitors": {
+                "type": "multiselect",
+                "label": "Competitors to Analyze",
+                "options": "medtech_competitors",
+                "defaults": ["Medtronic", "Johnson & Johnson", "Abbott", "Boston Scientific", "Stryker"],
                 "required": True
             }
         },
@@ -1032,7 +1055,11 @@ Stryker, Zimmer, Smith & Nephew, Edwards, Baxter, Fresenius, and B. Braun.""",
             ORDER BY mta.applicant_name, patent_count DESC
         """,
         "sql_template": """
-            WITH medical_tech_applications AS (
+            WITH competitor_patterns AS (
+                SELECT LOWER(competitor) AS pattern
+                FROM UNNEST(@competitors) AS competitor
+            ),
+            medical_tech_applications AS (
                 SELECT DISTINCT
                     a.appln_id,
                     a.appln_auth,
@@ -1047,18 +1074,9 @@ Stryker, Zimmer, Smith & Nephew, Edwards, Baxter, Fresenius, and B. Braun.""",
                 WHERE pa.applt_seq_nr > 0
                   AND tfi.techn_sector = 'Instruments'
                   AND a.appln_filing_year BETWEEN @year_start AND @year_end
-                  AND (
-                    LOWER(p.person_name) LIKE '%medtronic%' OR
-                    LOWER(p.person_name) LIKE '%johnson%johnson%' OR
-                    LOWER(p.person_name) LIKE '%abbott%' OR
-                    LOWER(p.person_name) LIKE '%boston%scientific%' OR
-                    LOWER(p.person_name) LIKE '%stryker%' OR
-                    LOWER(p.person_name) LIKE '%zimmer%' OR
-                    LOWER(p.person_name) LIKE '%smith%nephew%' OR
-                    LOWER(p.person_name) LIKE '%edwards%' OR
-                    LOWER(p.person_name) LIKE '%baxter%' OR
-                    LOWER(p.person_name) LIKE '%fresenius%' OR
-                    LOWER(p.person_name) LIKE '%braun%'
+                  AND EXISTS (
+                    SELECT 1 FROM competitor_patterns cp
+                    WHERE LOWER(p.person_name) LIKE CONCAT('%', cp.pattern, '%')
                   )
             )
             SELECT
@@ -1195,6 +1213,13 @@ Minimum threshold of 10 citations ensures significance.""",
                 "options": "jurisdictions",
                 "defaults": ["EP", "US", "CN"],
                 "required": True
+            },
+            "ipc_class": {
+                "type": "text",
+                "label": "IPC Class",
+                "defaults": "A61B 6",
+                "placeholder": "e.g., A61B 6, G06N, H01L",
+                "required": True
             }
         },
         "explanation": """This query analyzes grant rates for diagnostic imaging patents (IPC subclass A61B 6/)
@@ -1243,20 +1268,14 @@ Helps inform international filing strategy by showing office-specific grant succ
             ORDER BY grant_rate_pct DESC
         """,
         "sql_template": """
-            WITH diagnostic_imaging_patents AS (
+            WITH technology_patents AS (
                 SELECT DISTINCT
                     a.appln_id,
                     a.appln_auth,
                     a.granted
                 FROM tls201_appln a
                 JOIN tls209_appln_ipc ipc ON a.appln_id = ipc.appln_id
-                WHERE ipc.ipc_class_symbol LIKE 'A61B%'
-                  AND ipc.ipc_class_symbol LIKE '%6/%'
-                  AND ipc.ipc_class_symbol NOT LIKE '%16/%'
-                  AND ipc.ipc_class_symbol NOT LIKE '%26/%'
-                  AND ipc.ipc_class_symbol NOT LIKE '%36/%'
-                  AND ipc.ipc_class_symbol NOT LIKE '%46/%'
-                  AND ipc.ipc_class_symbol NOT LIKE '%56/%'
+                WHERE ipc.ipc_class_symbol LIKE CONCAT(REPLACE(@ipc_class, ' ', ''), '%')
                   AND a.appln_auth IN UNNEST(@jurisdictions)
                   AND a.appln_filing_year BETWEEN @year_start AND @year_end
             )
@@ -1271,7 +1290,7 @@ Helps inform international filing strategy by showing office-specific grant succ
                 COUNT(*) AS total_applications,
                 COUNT(CASE WHEN granted = 'Y' THEN 1 END) AS granted_patents,
                 ROUND(COUNT(CASE WHEN granted = 'Y' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS grant_rate_pct
-            FROM diagnostic_imaging_patents
+            FROM technology_patents
             GROUP BY appln_auth
             ORDER BY grant_rate_pct DESC
         """
@@ -1291,6 +1310,13 @@ Helps inform international filing strategy by showing office-specific grant succ
                 "label": "Filing Year Range",
                 "default_start": 2018,
                 "default_end": 2024,
+                "required": True
+            },
+            "ipc_class": {
+                "type": "text",
+                "label": "IPC Main Class",
+                "defaults": "A61B",
+                "placeholder": "e.g., A61B, G06F, H01L",
                 "required": True
             }
         },
@@ -1350,7 +1376,7 @@ Uses main class A61B% - covers all medical diagnosis/surgery subclasses.""",
               AND pa.applt_seq_nr > 0
               AND p.person_ctry_code = 'DE'
               AND p.nuts_level >= 1
-              AND ipc.ipc_class_symbol LIKE 'A61B%'
+              AND ipc.ipc_class_symbol LIKE CONCAT(REPLACE(@ipc_class, ' ', ''), '%')
             GROUP BY n.nuts, n.nuts_label
             HAVING COUNT(DISTINCT a.appln_id) >= 10
             ORDER BY total_applications DESC
@@ -1368,6 +1394,13 @@ Uses main class A61B% - covers all medical diagnosis/surgery subclasses.""",
                 "label": "Filing Year Range",
                 "default_start": 2019,
                 "default_end": 2024,
+                "required": True
+            },
+            "ipc_class": {
+                "type": "text",
+                "label": "IPC Main Class",
+                "defaults": "A61B",
+                "placeholder": "e.g., A61B, G06F, H01L",
                 "required": True
             }
         },
@@ -1473,7 +1506,7 @@ states of different sizes.""",
                 JOIN tls209_appln_ipc ipc ON a.appln_id = ipc.appln_id
                 JOIN tls207_pers_appln pa ON a.appln_id = pa.appln_id
                 JOIN tls206_person p ON pa.person_id = p.person_id
-                WHERE ipc.ipc_class_symbol LIKE 'A61B%'
+                WHERE ipc.ipc_class_symbol LIKE CONCAT(REPLACE(@ipc_class, ' ', ''), '%')
                   AND a.appln_filing_year BETWEEN @year_start AND @year_end
                   AND pa.applt_seq_nr > 0
                   AND p.person_ctry_code = 'DE'

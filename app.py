@@ -350,6 +350,17 @@ def resolve_options(options):
         return JURISDICTIONS
     elif options == 'wipo_fields':
         return list(TECH_FIELDS.keys())
+    elif options == 'tech_sectors':
+        # Unique WIPO technology sectors
+        return sorted(set(field[1] for field in TECH_FIELDS.values()))
+    elif options == 'medtech_competitors':
+        # Major MedTech competitors for competitive analysis (Q12)
+        return [
+            "Medtronic", "Johnson & Johnson", "Abbott", "Boston Scientific",
+            "Stryker", "Zimmer Biomet", "Smith & Nephew", "Edwards Lifesciences",
+            "Baxter", "Fresenius", "B. Braun", "Philips", "Siemens Healthineers",
+            "GE Healthcare", "Becton Dickinson"
+        ]
     elif isinstance(options, list):
         return options
     return []
