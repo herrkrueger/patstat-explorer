@@ -1024,7 +1024,7 @@ def render_detail_page(query_id: str):
 
                 # Take to TIP button (Story 5.1)
                 st.divider()
-                render_tip_panel(query_info, year_start, year_end, jurisdictions, tech_field)
+                render_tip_panel(query_info, collected_params)
 
             except Exception as e:
                 st.error(f"Error: {str(e)}")
@@ -1167,125 +1167,132 @@ GITHUB_REPO_URL = "https://github.com/mtc-20/patstat-explorer"
 
 
 def format_sql_for_tip(sql: str, params: dict) -> str:
-    """Format SQL for use in TIP with full table names and parameter comments."""
-    project = os.getenv("BIGQUERY_PROJECT", "patstat-mtc")
-    dataset = os.getenv("BIGQUERY_DATASET", "patstat")
+    """Format SQL for use in TIP by substituting actual parameter values.
 
-    # Add full table references
-    tables = ['tls201_appln', 'tls206_person', 'tls207_pers_appln',
-              'tls209_appln_ipc', 'tls211_pat_publn', 'tls212_citation',
-              'tls224_appln_cpc', 'tls230_appln_techn_field',
-              'tls901_techn_field_ipc', 'tls801_country', 'tls904_nuts']
+    TIP uses PatstatClient which executes raw SQL directly, so we need to
+    replace @param placeholders with actual values.
+    """
+    import re
 
     formatted_sql = sql
-    for table in tables:
-        # Replace backtick-quoted table names
-        formatted_sql = formatted_sql.replace(
-            f'`{table}`',
-            f'`{project}.{dataset}.{table}`'
-        )
-        # Replace unquoted table names (with word boundaries)
-        import re
-        formatted_sql = re.sub(
-            rf'\b{table}\b(?!\.)',
-            f'`{project}.{dataset}.{table}`',
-            formatted_sql
-        )
 
-    # Add parameter comment
-    param_lines = [f"-- Parameters used:"]
-    param_lines.append(f"-- Years: {params.get('year_start', 'N/A')}-{params.get('year_end', 'N/A')}")
+    # Remove backticks from table names (TIP doesn't need them)
+    formatted_sql = re.sub(r'`([^`]+)`', r'\1', formatted_sql)
+
+    # Substitute year parameters
+    if params.get('year_start') is not None:
+        formatted_sql = formatted_sql.replace('@year_start', str(params['year_start']))
+    if params.get('year_end') is not None:
+        formatted_sql = formatted_sql.replace('@year_end', str(params['year_end']))
+
+    # Substitute jurisdictions array - convert UNNEST(@jurisdictions) to IN ('EP', 'US', 'DE')
     if params.get('jurisdictions'):
-        param_lines.append(f"-- Jurisdictions: {', '.join(params['jurisdictions'])}")
-    if params.get('tech_field'):
-        param_lines.append(f"-- Tech Field: {params['tech_field']}")
+        jurisdiction_list = ", ".join([f"'{j}'" for j in params['jurisdictions']])
+        # Replace UNNEST(@jurisdictions) pattern with IN clause
+        formatted_sql = re.sub(
+            r'IN\s+UNNEST\s*\(\s*@jurisdictions\s*\)',
+            f"IN ({jurisdiction_list})",
+            formatted_sql,
+            flags=re.IGNORECASE
+        )
 
-    return "\n".join(param_lines) + "\n\n" + formatted_sql
+    # Substitute tech_field (integer)
+    if params.get('tech_field') is not None:
+        formatted_sql = formatted_sql.replace('@tech_field', str(params['tech_field']))
+
+    # Substitute tech_sector (string)
+    if params.get('tech_sector') is not None:
+        formatted_sql = formatted_sql.replace('@tech_sector', f"'{params['tech_sector']}'")
+
+    # Substitute applicant_name (string)
+    if params.get('applicant_name') is not None:
+        # Escape single quotes in the name
+        safe_name = params['applicant_name'].replace("'", "''")
+        formatted_sql = formatted_sql.replace('@applicant_name', f"'{safe_name}'")
+
+    # Substitute ipc_class (string)
+    if params.get('ipc_class') is not None:
+        formatted_sql = formatted_sql.replace('@ipc_class', f"'{params['ipc_class']}'")
+
+    # Substitute competitors array
+    if params.get('competitors'):
+        competitors_list = ", ".join([f"'{c}'" for c in params['competitors']])
+        formatted_sql = re.sub(
+            r'UNNEST\s*\(\s*@competitors\s*\)',
+            f"({competitors_list})",
+            formatted_sql,
+            flags=re.IGNORECASE
+        )
+
+    # Clean up whitespace
+    formatted_sql = formatted_sql.strip()
+
+    return formatted_sql
 
 
-def render_tip_panel(query_info: dict, year_start: int, year_end: int,
-                     jurisdictions: list, tech_field: int):
-    """Render the Take to TIP panel (Stories 5.1, 5.2)."""
+def render_tip_panel(query_info: dict, collected_params: dict):
+    """Render the Take to TIP panel (Stories 5.1, 5.2).
 
+    Args:
+        query_info: Query metadata dict
+        collected_params: All collected parameters from the UI
+    """
     with st.expander("🎓 Take to TIP - Use in EPO's Jupyter Environment", expanded=False):
         st.markdown("""
-        **TIP (Training Intelligence Portal)** lets you run this same query in a full
-        Jupyter environment with more flexibility and your own customizations.
+        **TIP (Technology & Innovation Portal)** lets you run this query in EPO's
+        Jupyter environment with full PATSTAT access.
         """)
 
-        # Format SQL for TIP
+        # Get SQL template and substitute parameters
         sql = query_info.get('sql_template', query_info.get('sql', ''))
-        params = {
-            'year_start': year_start,
-            'year_end': year_end,
-            'jurisdictions': jurisdictions,
-            'tech_field': tech_field
-        }
-        tip_sql = format_sql_for_tip(sql, params)
+        tip_sql = format_sql_for_tip(sql, collected_params)
 
-        st.markdown("**📋 Your SQL Query (ready to copy):**")
+        st.markdown("**📋 Ready-to-run SQL Query:**")
         st.code(tip_sql, language="sql")
 
-        # Quick start instructions
-        st.markdown("**📝 Quick Start in TIP:**")
-        st.markdown("""
-        1. **Login** to [TIP](https://tip.epo.org) with your EPO account
-        2. **Open** Jupyter Notebooks from the dashboard
-        3. **Create** a new Python 3 notebook
-        4. **Paste** the code below and run!
-        """)
-
-        # Python code template
-        jupyter_code = f'''from google.cloud import bigquery
+        # Python code template for TIP
+        jupyter_code = f'''from epo.tipdata.patstat import PatstatClient
 import pandas as pd
+import time
 
-client = bigquery.Client()
+# Connect to PATSTAT
+patstat = PatstatClient(env='PROD')
 
-query = """
+def timed_query(query):
+    """Execute query and return DataFrame with timing."""
+    start = time.time()
+    res = patstat.sql_query(query, use_legacy_sql=False)
+    print(f"Query took {{time.time() - start:.2f}}s ({{len(res)}} rows)")
+    return pd.DataFrame(res)
+
+# Run the query
+df = timed_query("""
 {tip_sql}
-"""
+""")
 
-df = client.query(query).to_dataframe()
-print(f"Found {{len(df)}} results")
-df.head(20)'''
+# Display results
+df'''
 
-        with st.expander("📄 Complete Jupyter Code"):
-            st.code(jupyter_code, language="python")
+        st.markdown("**📄 Complete TIP Notebook Code:**")
+        st.code(jupyter_code, language="python")
 
-        # Detailed instructions
-        with st.expander("📚 Detailed Instructions"):
+        # Quick start instructions
+        with st.expander("📝 How to use in TIP"):
             st.markdown("""
-            ### Step 1: Access TIP
-            1. Go to [tip.epo.org](https://tip.epo.org)
-            2. Login with your EPO account
-            3. If you don't have an account, contact EPO Academy
+            1. **Login** to [TIP](https://tip.epo.org) with your EPO account
+            2. **Open** JupyterLab from the TIP dashboard
+            3. **Create** a new Python 3 notebook
+            4. **Copy** the code above into a cell
+            5. **Run** with Shift+Enter
 
-            ### Step 2: Open Jupyter
-            1. From the TIP dashboard, click "Notebooks"
-            2. Select "JupyterLab" or "Jupyter Notebook"
-            3. Wait for the environment to load
-
-            ### Step 3: Create Notebook
-            1. Click "File" → "New" → "Notebook"
-            2. Select "Python 3" as the kernel
-
-            ### Step 4: Run Query
-            1. Copy the code from above
-            2. Paste into a notebook cell
-            3. Press Shift+Enter to run
-
-            ### Troubleshooting
-            - **Permission denied**: Make sure you're logged into TIP
-            - **Query timeout**: Add `LIMIT 1000` for testing
-            - **Table not found**: Check the full table path includes project.dataset
+            **Tips:**
+            - First query may take longer (cold start)
+            - Add `LIMIT 100` for testing large queries
+            - Results are returned as a list of dicts, converted to DataFrame
             """)
 
-        # Links
-        col1, col2 = st.columns(2)
-        with col1:
-            st.link_button("🎓 Open TIP Platform", TIP_PLATFORM_URL)
-        with col2:
-            st.caption("Opens in new tab")
+        # Link to TIP
+        st.link_button("🎓 Open TIP Platform", TIP_PLATFORM_URL)
 
 
 def render_footer():
