@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 import time
 import json
-from queries_bq import QUERIES
+from queries_bq import QUERIES, DYNAMIC_QUERIES
 
 # =============================================================================
 # COLOR PALETTE (Story 1.4 - UX Design Spec)
@@ -37,7 +37,7 @@ def init_session_state():
 
     Sets default values only if keys don't already exist.
     Navigation state:
-    - current_page: 'landing' or 'detail'
+    - current_page: 'landing', 'detail', 'contribute', or 'ai_builder'
     - selected_query: query ID when on detail page
     - selected_category: preserves category filter across navigation
 
@@ -45,6 +45,10 @@ def init_session_state():
     - year_start, year_end: year range for queries
     - jurisdictions: list of patent office codes
     - tech_field: WIPO technology field code or None
+
+    Search/Filter state (Story 2.1):
+    - search_term: text search for queries
+    - selected_stakeholders: stakeholder tag filters
     """
     # Navigation state
     if 'current_page' not in st.session_state:
@@ -63,6 +67,42 @@ def init_session_state():
         st.session_state['jurisdictions'] = DEFAULT_JURISDICTIONS.copy()
     if 'tech_field' not in st.session_state:
         st.session_state['tech_field'] = DEFAULT_TECH_FIELD
+
+    # Search/Filter state (Story 2.1)
+    if 'search_term' not in st.session_state:
+        st.session_state['search_term'] = ''
+    if 'selected_stakeholders' not in st.session_state:
+        st.session_state['selected_stakeholders'] = []
+
+    # Contribution state (Story 3.1)
+    if 'contribution' not in st.session_state:
+        st.session_state['contribution'] = {
+            'title': '',
+            'description': '',
+            'tags': [],
+            'category': '',
+            'sql': '',
+            'parameters': [],
+            'explanation': ''
+        }
+    if 'contribution_step' not in st.session_state:
+        st.session_state['contribution_step'] = 1
+
+    # AI Builder state (Story 4.1)
+    if 'ai_request' not in st.session_state:
+        st.session_state['ai_request'] = ''
+    if 'ai_generation' not in st.session_state:
+        st.session_state['ai_generation'] = None
+    if 'ai_query_versions' not in st.session_state:
+        st.session_state['ai_query_versions'] = []
+
+    # Favorites state (Story 4.4)
+    if 'favorites' not in st.session_state:
+        st.session_state['favorites'] = []
+
+    # Contributed queries (Story 3.4)
+    if 'contributed_queries' not in st.session_state:
+        st.session_state['contributed_queries'] = {}
 
 
 def go_to_landing():
@@ -87,17 +127,101 @@ def go_to_detail(query_id: str):
     """Navigate to detail page for a specific query (AC #4).
 
     Args:
-        query_id: Must be a valid key in QUERIES dict
+        query_id: Must be a valid key in QUERIES or contributed_queries dict
     """
-    if query_id not in QUERIES:
+    all_queries = get_all_queries()
+    if query_id not in all_queries:
         return  # Invalid query_id, don't navigate
     st.session_state['current_page'] = 'detail'
     st.session_state['selected_query'] = query_id
     st.rerun()
 
 
+def go_to_contribute():
+    """Navigate to contribute query page (Story 3.1)."""
+    st.session_state['current_page'] = 'contribute'
+    st.session_state['contribution_step'] = 1
+    st.rerun()
+
+
+def go_to_ai_builder():
+    """Navigate to AI query builder page (Story 4.1)."""
+    st.session_state['current_page'] = 'ai_builder'
+    st.rerun()
+
+
 # Category definitions for landing page pills (AC #1)
 CATEGORIES = ["Competitors", "Trends", "Regional", "Technology"]
+
+# Stakeholder tags for filtering (Story 2.1)
+STAKEHOLDER_TAGS = ["PATLIB", "BUSINESS", "UNIVERSITY"]
+
+
+def filter_queries(queries: dict, search_term: str = None, category: str = None,
+                   stakeholders: list = None) -> dict:
+    """Filter queries by search term, category, and stakeholder tags (Story 2.1).
+
+    Args:
+        queries: The QUERIES dict to filter
+        search_term: Text to search in title, description, and tags
+        category: Category filter (Competitors, Trends, Regional, Technology)
+        stakeholders: List of stakeholder tags to filter by (AND logic within)
+
+    Returns:
+        Filtered dict of queries
+    """
+    filtered = queries
+
+    # Search filter - match title, description, or tags
+    if search_term and search_term.strip():
+        search_lower = search_term.lower().strip()
+        filtered = {
+            qid: q for qid, q in filtered.items()
+            if search_lower in q.get('title', '').lower()
+            or search_lower in q.get('description', '').lower()
+            or any(search_lower in tag.lower() for tag in q.get('tags', []))
+            or search_lower in qid.lower()
+        }
+
+    # Category filter
+    if category:
+        filtered = {
+            qid: q for qid, q in filtered.items()
+            if q.get('category') == category
+        }
+
+    # Stakeholder filter - must have at least one of selected stakeholders
+    if stakeholders:
+        filtered = {
+            qid: q for qid, q in filtered.items()
+            if any(s in q.get('tags', []) for s in stakeholders)
+        }
+
+    return filtered
+
+
+def get_all_queries() -> dict:
+    """Get all queries including contributed ones (Story 3.4)."""
+    all_queries = QUERIES.copy()
+    # Add contributed queries from session
+    contributed = st.session_state.get('contributed_queries', {})
+    all_queries.update(contributed)
+    return all_queries
+
+
+def render_tags_inline(tags: list) -> str:
+    """Render colored tag pills as HTML (Story 2.2)."""
+    tag_colors = {
+        "PATLIB": "#1f77b4",
+        "BUSINESS": "#2ca02c",
+        "UNIVERSITY": "#9467bd"
+    }
+    return " ".join([
+        f'<span style="background-color: {tag_colors.get(t, "#666")}; '
+        f'color: white; padding: 2px 8px; border-radius: 10px; '
+        f'font-size: 0.75em; margin-right: 4px;">{t}</span>'
+        for t in tags
+    ])
 
 # =============================================================================
 # PARAMETER REFERENCE DATA (Story 1.2)
@@ -339,21 +463,45 @@ COMMON_QUESTIONS = ["Q06", "Q07", "Q08", "Q11", "Q15"]
 
 
 def render_landing_page():
-    """Render the landing page with category pills and query list (AC #1, #2, #3).
+    """Render the landing page with search, filters, and query list (Stories 1.1, 2.1, 2.2).
 
     Displays:
-    - Title: "What do you want to know?"
+    - Title with search box
     - Category pills for filtering
+    - Stakeholder tag filters
+    - Favorites section (if any)
     - Common Questions section with popular queries
-    - Full query list filtered by selected category
+    - Full query list filtered by search, category, and stakeholders
     """
-    # Page title (AC #1)
-    st.header("What do you want to know?")
+    all_queries = get_all_queries()
+
+    # Header row with title and search (Story 2.1)
+    col_title, col_search = st.columns([2, 1])
+    with col_title:
+        st.header("What do you want to know?")
+    with col_search:
+        search_term = st.text_input(
+            "Search",
+            value=st.session_state.get('search_term', ''),
+            placeholder="Search queries...",
+            label_visibility="collapsed",
+            key="search_input"
+        )
+        st.session_state['search_term'] = search_term
+
+    # Action buttons for advanced features (Stories 3.1, 4.1)
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col2:
+        if st.button("🤖 AI Query Builder", use_container_width=True):
+            go_to_ai_builder()
+    with col3:
+        if st.button("📝 Contribute Query", use_container_width=True):
+            go_to_contribute()
 
     ''  # Spacing
 
     # Category pills (AC #1, #2)
-    selected = st.pills(
+    selected_category = st.pills(
         "Categories",
         options=CATEGORIES,
         default=st.session_state.get('selected_category'),
@@ -362,83 +510,169 @@ def render_landing_page():
     )
 
     # Update session state if category changed
-    if selected != st.session_state.get('selected_category'):
-        st.session_state['selected_category'] = selected
+    if selected_category != st.session_state.get('selected_category'):
+        st.session_state['selected_category'] = selected_category
+
+    # Stakeholder filter pills (Story 2.1)
+    selected_stakeholders = st.pills(
+        "Stakeholders",
+        options=STAKEHOLDER_TAGS,
+        default=st.session_state.get('selected_stakeholders', []),
+        selection_mode="multi",
+        key="stakeholder_pills"
+    )
+    st.session_state['selected_stakeholders'] = selected_stakeholders if selected_stakeholders else []
 
     ''  # Spacing
 
-    # Common Questions section (AC #3)
-    st.subheader("Common Questions")
+    # Show active filter summary and clear button
+    active_filters = []
+    if search_term:
+        active_filters.append(f'"{search_term}"')
+    if selected_category:
+        active_filters.append(selected_category)
+    if selected_stakeholders:
+        active_filters.extend(selected_stakeholders)
 
-    cols = st.columns(len(COMMON_QUESTIONS))
-    for i, query_id in enumerate(COMMON_QUESTIONS):
-        if query_id in QUERIES:
-            query_info = QUERIES[query_id]
-            with cols[i]:
-                # Display as clickable card with question-style title
+    if active_filters:
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.caption(f"Filtering by: {', '.join(active_filters)}")
+        with col2:
+            if st.button("Clear filters", type="secondary", use_container_width=True):
+                st.session_state['search_term'] = ''
+                st.session_state['selected_category'] = None
+                st.session_state['selected_stakeholders'] = []
+                st.rerun()
+
+    # Favorites section (Story 4.4)
+    favorites = st.session_state.get('favorites', [])
+    if favorites:
+        st.subheader("⭐ My Saved Queries")
+        fav_cols = st.columns(min(len(favorites), 3))
+        for i, fav in enumerate(favorites[:3]):
+            with fav_cols[i % 3]:
+                if st.button(f"⭐ {fav.get('name', 'Saved Query')}", key=f"fav_{i}", use_container_width=True):
+                    # Load favorite query
+                    st.session_state['selected_query'] = fav.get('id')
+                    st.session_state['current_page'] = 'detail'
+                    st.rerun()
+        if len(favorites) > 3:
+            st.caption(f"+{len(favorites) - 3} more saved queries")
+        st.divider()
+
+    # Common Questions section (AC #3) - only show if no active filters
+    if not search_term and not selected_category and not selected_stakeholders:
+        st.subheader("Common Questions")
+
+        cols = st.columns(len(COMMON_QUESTIONS))
+        for i, query_id in enumerate(COMMON_QUESTIONS):
+            if query_id in all_queries:
+                query_info = all_queries[query_id]
+                with cols[i]:
+                    if st.button(
+                        query_info['title'],
+                        key=f"common_{query_id}",
+                        use_container_width=True
+                    ):
+                        go_to_detail(query_id)
+
+        ''  # Spacing
+        st.divider()
+
+    # Full query list with filtering (Stories 2.1, 2.2)
+    render_query_list(search_term, selected_category, selected_stakeholders)
+
+
+def render_query_list(search_term: str = None, category_filter: str = None,
+                      stakeholder_filter: list = None):
+    """Render query list with enhanced cards and filtering (Stories 2.1, 2.2).
+
+    Args:
+        search_term: Text search filter
+        category_filter: Category name to filter by
+        stakeholder_filter: List of stakeholder tags to filter by
+    """
+    all_queries = get_all_queries()
+
+    # Apply filters
+    filtered_queries = filter_queries(
+        all_queries,
+        search_term=search_term,
+        category=category_filter,
+        stakeholders=stakeholder_filter
+    )
+
+    # Handle empty results (Story 2.1 AC #3)
+    if not filtered_queries:
+        st.info("No queries match your search criteria.")
+        st.markdown("**Suggestions:**")
+        st.markdown("- Try different keywords")
+        st.markdown("- Remove some filters")
+        st.markdown("- Check spelling")
+        return
+
+    # Show result count
+    st.caption(f"Showing {len(filtered_queries)} queries")
+
+    # Display enhanced query cards (Story 2.2)
+    for query_id, query_info in filtered_queries.items():
+        with st.container(border=True):
+            # Query card layout
+            col1, col2 = st.columns([4, 1])
+
+            with col1:
+                # Title as clickable button
                 if st.button(
-                    query_info['title'],
-                    key=f"common_{query_id}",
+                    f"**{query_id}:** {query_info['title']}",
+                    key=f"query_{query_id}",
                     use_container_width=True
                 ):
                     go_to_detail(query_id)
 
-    ''  # Spacing
-    st.divider()
+                # Description snippet
+                description = query_info.get('description', '')
+                if len(description) > 120:
+                    description = description[:117] + "..."
+                st.caption(description)
 
-    # Full query list with filtering (AC #2)
-    render_query_list(selected)
+                # Tags as colored pills
+                tags_html = render_tags_inline(query_info.get('tags', []))
+                st.markdown(tags_html, unsafe_allow_html=True)
 
-
-def render_query_list(category_filter):
-    """Render query list filtered by category (AC #2).
-
-    Args:
-        category_filter: Category name to filter by, or None for all queries
-    """
-    filtered_queries = QUERIES
-    if category_filter:
-        filtered_queries = {
-            qid: qinfo for qid, qinfo in QUERIES.items()
-            if qinfo.get("category") == category_filter
-        }
-
-    if not filtered_queries:
-        st.info(f"No queries in category: {category_filter}")
-        return
-
-    for query_id, query_info in filtered_queries.items():
-        if st.button(
-            f"{query_id}: {query_info['title']}",
-            key=f"query_{query_id}",
-            use_container_width=True
-        ):
-            go_to_detail(query_id)
+            with col2:
+                # Estimated time and category
+                est_time = query_info.get('estimated_seconds_cached', 5)
+                st.metric("", f"~{format_time(est_time)}", label_visibility="collapsed")
+                st.caption(query_info.get('category', ''))
 
 
 def render_detail_page(query_id: str):
-    """Render detail page for a specific query (Story 1.1 AC #4, #5, Story 1.2 AC #1).
+    """Render detail page for a specific query (Stories 1.1, 1.2, 2.2, 5.1).
 
     Displays:
     - Back button to return to landing page
     - Parameter block with Time → Geography → Technology → Action (Story 1.2)
-    - Query title and description
+    - Query title, description, and metadata (Story 2.2)
     - Query execution and results
+    - Take to TIP button (Story 5.1)
 
     Args:
         query_id: The ID of the query to display (e.g., 'Q01')
     """
+    all_queries = get_all_queries()
+
     # Back button (AC #4, #5)
     if st.button("← Back to Questions", key="back_to_landing"):
         go_to_landing()
         return  # Exit early since we're navigating
 
     # Get query info first to check validity
-    if query_id not in QUERIES:
+    if query_id not in all_queries:
         st.error(f"Query '{query_id}' not found.")
         return
 
-    query_info = QUERIES[query_id]
+    query_info = all_queries[query_id]
 
     # Header with ID and title
     st.header(f"{query_id}: {query_info['title']}")
@@ -511,7 +745,18 @@ def render_detail_page(query_id: str):
 
         with st.spinner(f"{spinner_msg} (~{format_time(estimated_seconds)})"):
             try:
-                df, execution_time = run_query(client, query_info["sql"])
+                # Use parameterized query if sql_template is available (Story 1.7)
+                if "sql_template" in query_info:
+                    params = {
+                        "year_start": year_start,
+                        "year_end": year_end,
+                        "jurisdictions": jurisdictions if jurisdictions else None,
+                        "tech_field": tech_field
+                    }
+                    df, execution_time = run_parameterized_query(client, query_info["sql_template"], params)
+                else:
+                    # Fallback to static SQL for queries not yet converted
+                    df, execution_time = run_query(client, query_info["sql"])
 
                 # Empty results handling (Story 1.3)
                 if df.empty:
@@ -583,6 +828,10 @@ def render_detail_page(query_id: str):
                             key="download_chart"
                         )
 
+                # Take to TIP button (Story 5.1)
+                st.divider()
+                render_tip_panel(query_info, year_start, year_end, jurisdictions, tech_field)
+
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
@@ -640,6 +889,51 @@ def run_query(client, query):
     return result, execution_time
 
 
+def run_parameterized_query(client, sql_template: str, params: dict):
+    """Execute a parameterized query with BigQuery query parameters.
+
+    Args:
+        client: BigQuery client
+        sql_template: SQL with @param placeholders
+        params: Dict with parameter values:
+            - year_start: int
+            - year_end: int
+            - jurisdictions: list[str]
+            - tech_field: int or None
+
+    Returns:
+        tuple: (DataFrame, execution_time in seconds)
+    """
+    project = os.getenv("BIGQUERY_PROJECT", "patstat-mtc")
+    dataset = os.getenv("BIGQUERY_DATASET", "patstat")
+
+    # Build query parameters
+    query_params = []
+
+    if "year_start" in params and params["year_start"] is not None:
+        query_params.append(bigquery.ScalarQueryParameter("year_start", "INT64", params["year_start"]))
+
+    if "year_end" in params and params["year_end"] is not None:
+        query_params.append(bigquery.ScalarQueryParameter("year_end", "INT64", params["year_end"]))
+
+    if "jurisdictions" in params and params["jurisdictions"]:
+        query_params.append(bigquery.ArrayQueryParameter("jurisdictions", "STRING", params["jurisdictions"]))
+
+    if "tech_field" in params and params["tech_field"] is not None:
+        query_params.append(bigquery.ScalarQueryParameter("tech_field", "INT64", params["tech_field"]))
+
+    # Set job config with parameters
+    job_config = bigquery.QueryJobConfig(
+        default_dataset=f"{project}.{dataset}",
+        query_parameters=query_params
+    )
+
+    start_time = time.time()
+    result = client.query(sql_template, job_config=job_config).to_dataframe()
+    execution_time = time.time() - start_time
+    return result, execution_time
+
+
 def format_time(seconds: float) -> str:
     """Format seconds into human-readable string."""
     if seconds < 1:
@@ -652,12 +946,653 @@ def format_time(seconds: float) -> str:
         return f"{minutes}m {secs:.0f}s"
 
 
+# =============================================================================
+# TIP INTEGRATION (Stories 5.1, 5.2)
+# =============================================================================
+
+TIP_PLATFORM_URL = "https://tip.epo.org"
+GITHUB_REPO_URL = "https://github.com/mtc-20/patstat-explorer"
+
+
+def format_sql_for_tip(sql: str, params: dict) -> str:
+    """Format SQL for use in TIP with full table names and parameter comments."""
+    project = os.getenv("BIGQUERY_PROJECT", "patstat-mtc")
+    dataset = os.getenv("BIGQUERY_DATASET", "patstat")
+
+    # Add full table references
+    tables = ['tls201_appln', 'tls206_person', 'tls207_pers_appln',
+              'tls209_appln_ipc', 'tls211_pat_publn', 'tls212_citation',
+              'tls224_appln_cpc', 'tls230_appln_techn_field',
+              'tls901_techn_field_ipc', 'tls801_country', 'tls904_nuts']
+
+    formatted_sql = sql
+    for table in tables:
+        # Replace backtick-quoted table names
+        formatted_sql = formatted_sql.replace(
+            f'`{table}`',
+            f'`{project}.{dataset}.{table}`'
+        )
+        # Replace unquoted table names (with word boundaries)
+        import re
+        formatted_sql = re.sub(
+            rf'\b{table}\b(?!\.)',
+            f'`{project}.{dataset}.{table}`',
+            formatted_sql
+        )
+
+    # Add parameter comment
+    param_lines = [f"-- Parameters used:"]
+    param_lines.append(f"-- Years: {params.get('year_start', 'N/A')}-{params.get('year_end', 'N/A')}")
+    if params.get('jurisdictions'):
+        param_lines.append(f"-- Jurisdictions: {', '.join(params['jurisdictions'])}")
+    if params.get('tech_field'):
+        param_lines.append(f"-- Tech Field: {params['tech_field']}")
+
+    return "\n".join(param_lines) + "\n\n" + formatted_sql
+
+
+def render_tip_panel(query_info: dict, year_start: int, year_end: int,
+                     jurisdictions: list, tech_field: int):
+    """Render the Take to TIP panel (Stories 5.1, 5.2)."""
+
+    with st.expander("🎓 Take to TIP - Use in EPO's Jupyter Environment", expanded=False):
+        st.markdown("""
+        **TIP (Training Intelligence Portal)** lets you run this same query in a full
+        Jupyter environment with more flexibility and your own customizations.
+        """)
+
+        # Format SQL for TIP
+        sql = query_info.get('sql_template', query_info.get('sql', ''))
+        params = {
+            'year_start': year_start,
+            'year_end': year_end,
+            'jurisdictions': jurisdictions,
+            'tech_field': tech_field
+        }
+        tip_sql = format_sql_for_tip(sql, params)
+
+        st.markdown("**📋 Your SQL Query (ready to copy):**")
+        st.code(tip_sql, language="sql")
+
+        # Quick start instructions
+        st.markdown("**📝 Quick Start in TIP:**")
+        st.markdown("""
+        1. **Login** to [TIP](https://tip.epo.org) with your EPO account
+        2. **Open** Jupyter Notebooks from the dashboard
+        3. **Create** a new Python 3 notebook
+        4. **Paste** the code below and run!
+        """)
+
+        # Python code template
+        jupyter_code = f'''from google.cloud import bigquery
+import pandas as pd
+
+client = bigquery.Client()
+
+query = """
+{tip_sql}
+"""
+
+df = client.query(query).to_dataframe()
+print(f"Found {{len(df)}} results")
+df.head(20)'''
+
+        with st.expander("📄 Complete Jupyter Code"):
+            st.code(jupyter_code, language="python")
+
+        # Detailed instructions
+        with st.expander("📚 Detailed Instructions"):
+            st.markdown("""
+            ### Step 1: Access TIP
+            1. Go to [tip.epo.org](https://tip.epo.org)
+            2. Login with your EPO account
+            3. If you don't have an account, contact EPO Academy
+
+            ### Step 2: Open Jupyter
+            1. From the TIP dashboard, click "Notebooks"
+            2. Select "JupyterLab" or "Jupyter Notebook"
+            3. Wait for the environment to load
+
+            ### Step 3: Create Notebook
+            1. Click "File" → "New" → "Notebook"
+            2. Select "Python 3" as the kernel
+
+            ### Step 4: Run Query
+            1. Copy the code from above
+            2. Paste into a notebook cell
+            3. Press Shift+Enter to run
+
+            ### Troubleshooting
+            - **Permission denied**: Make sure you're logged into TIP
+            - **Query timeout**: Add `LIMIT 1000` for testing
+            - **Table not found**: Check the full table path includes project.dataset
+            """)
+
+        # Links
+        col1, col2 = st.columns(2)
+        with col1:
+            st.link_button("🎓 Open TIP Platform", TIP_PLATFORM_URL)
+        with col2:
+            st.caption("Opens in new tab")
+
+
+def render_footer():
+    """Render app footer with GitHub and TIP links (Story 5.3)."""
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown(
+            f"""
+            <div style="text-align: center; padding: 10px; color: #666;">
+                <a href="{GITHUB_REPO_URL}" target="_blank" style="text-decoration: none; color: #1E3A5F;">
+                    📁 View on GitHub
+                </a>
+                &nbsp;|&nbsp;
+                <a href="{TIP_PLATFORM_URL}" target="_blank" style="text-decoration: none; color: #1E3A5F;">
+                    🎓 EPO TIP Platform
+                </a>
+                <br><br>
+                <span style="font-size: 0.8em;">
+                    PATSTAT Explorer - Built for the PATLIB community
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+
+# =============================================================================
+# CONTRIBUTION SYSTEM (Stories 3.1-3.4)
+# =============================================================================
+
+def validate_contribution_step1() -> list:
+    """Validate basic query information (Story 3.3)."""
+    contrib = st.session_state.get('contribution', {})
+    errors = []
+    if not contrib.get('title', '').strip():
+        errors.append("Title is required")
+    if not contrib.get('description', '').strip():
+        errors.append("Description is required")
+    if not contrib.get('sql', '').strip():
+        errors.append("SQL query is required")
+    if not contrib.get('tags', []):
+        errors.append("Select at least one stakeholder tag")
+    if not contrib.get('category', ''):
+        errors.append("Select a category")
+    return errors
+
+
+def detect_sql_parameters(sql: str) -> list:
+    """Extract @parameter names from SQL (Story 3.2)."""
+    import re
+    pattern = r'@(\w+)'
+    return list(set(re.findall(pattern, sql)))
+
+
+def submit_contribution(contribution: dict) -> str:
+    """Add contribution to queries and return new query ID (Story 3.4)."""
+    # Generate next available ID
+    existing_ids = [int(qid[1:]) for qid in QUERIES.keys()
+                    if qid.startswith('Q') and qid[1:].isdigit()]
+    next_num = max(existing_ids, default=0) + 1
+    new_id = f"Q{next_num:02d}"
+
+    # Format as QUERIES entry
+    new_query = {
+        'title': contribution['title'],
+        'tags': contribution['tags'],
+        'category': contribution['category'],
+        'description': contribution['description'],
+        'explanation': contribution.get('explanation', ''),
+        'key_outputs': contribution.get('key_outputs', []),
+        'estimated_seconds_first_run': 5,
+        'estimated_seconds_cached': 2,
+        'sql': contribution['sql'],
+        'contributed': True,
+    }
+
+    # Store in session state (persists during session)
+    if 'contributed_queries' not in st.session_state:
+        st.session_state['contributed_queries'] = {}
+    st.session_state['contributed_queries'][new_id] = new_query
+
+    return new_id
+
+
+def render_contribute_page():
+    """Render the contribution flow (Stories 3.1-3.4)."""
+    if st.button("← Back to Questions", key="back_from_contribute"):
+        go_to_landing()
+        return
+
+    st.header("Contribute a Query")
+    st.markdown("Share your SQL expertise with 300 PATLIB centres!")
+
+    # Contribution guidelines
+    with st.expander("📋 Contribution Guidelines"):
+        st.markdown("""
+        **What makes a good query:**
+        - Clear question-style title (e.g., "Who are the top filers in X?")
+        - Brief description explaining what the query reveals
+        - SQL that executes in under 15 seconds
+        - Appropriate stakeholder tags
+
+        **SQL Best Practices:**
+        - Use BigQuery syntax
+        - Include LIMIT for large result sets
+        - Use `@parameter` syntax for dynamic values
+        - Test your query before submitting
+        """)
+
+    step = st.session_state.get('contribution_step', 1)
+    contrib = st.session_state.get('contribution', {})
+
+    if step == 1:
+        # Step 1: Basic info
+        st.subheader("Step 1: Query Details")
+
+        contrib['title'] = st.text_input(
+            "Title (question format)",
+            value=contrib.get('title', ''),
+            placeholder="Who are the top patent filers in...?"
+        )
+
+        contrib['description'] = st.text_area(
+            "Description",
+            value=contrib.get('description', ''),
+            placeholder="Briefly explain what this query reveals...",
+            height=100
+        )
+
+        contrib['category'] = st.selectbox(
+            "Category",
+            options=[""] + CATEGORIES,
+            index=CATEGORIES.index(contrib['category']) + 1 if contrib.get('category') in CATEGORIES else 0
+        )
+
+        contrib['tags'] = st.multiselect(
+            "Stakeholder Tags",
+            options=STAKEHOLDER_TAGS,
+            default=contrib.get('tags', [])
+        )
+
+        contrib['sql'] = st.text_area(
+            "SQL Query",
+            value=contrib.get('sql', ''),
+            placeholder="SELECT ...\nFROM tls201_appln a\nWHERE ...",
+            height=200
+        )
+
+        contrib['explanation'] = st.text_area(
+            "Detailed Explanation (optional)",
+            value=contrib.get('explanation', ''),
+            placeholder="Additional context about the query...",
+            height=100
+        )
+
+        st.session_state['contribution'] = contrib
+
+        # Detect parameters
+        if contrib.get('sql'):
+            params = detect_sql_parameters(contrib['sql'])
+            if params:
+                st.info(f"Detected parameters: {', '.join(['@' + p for p in params])}")
+
+        col1, col2 = st.columns(2)
+        with col2:
+            if st.button("Preview Query →", type="primary"):
+                errors = validate_contribution_step1()
+                if errors:
+                    for error in errors:
+                        st.error(error)
+                else:
+                    st.session_state['contribution_step'] = 2
+                    st.rerun()
+
+    elif step == 2:
+        # Step 2: Preview
+        st.subheader("Step 2: Preview Your Query")
+
+        st.markdown("**Query Card Preview:**")
+        with st.container(border=True):
+            st.markdown(f"**Q??: {contrib['title']}**")
+            st.caption(contrib['description'])
+            tags_html = render_tags_inline(contrib.get('tags', []))
+            st.markdown(tags_html, unsafe_allow_html=True)
+
+        st.markdown("**SQL:**")
+        st.code(contrib['sql'], language="sql")
+
+        # Test query button
+        if st.button("🧪 Test Query"):
+            client = get_bigquery_client()
+            if client:
+                with st.spinner("Testing query..."):
+                    try:
+                        # Add LIMIT if not present for safety
+                        test_sql = contrib['sql']
+                        if 'LIMIT' not in test_sql.upper():
+                            test_sql = test_sql.rstrip().rstrip(';') + ' LIMIT 100'
+                        df, exec_time = run_query(client, test_sql)
+                        st.success(f"Query executed successfully in {format_time(exec_time)} - {len(df)} rows")
+                        with st.expander("View Results"):
+                            st.dataframe(df.head(20))
+                    except Exception as e:
+                        st.error(f"Query error: {str(e)}")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("← Edit"):
+                st.session_state['contribution_step'] = 1
+                st.rerun()
+        with col3:
+            if st.button("Submit Query →", type="primary"):
+                new_id = submit_contribution(contrib)
+                st.session_state['contribution_step'] = 3
+                st.session_state['submitted_query_id'] = new_id
+                st.rerun()
+
+    elif step == 3:
+        # Step 3: Confirmation
+        new_id = st.session_state.get('submitted_query_id', 'Q??')
+        st.success("🎉 Query Submitted Successfully!")
+        st.markdown(f"""
+        Your query has been added to the library:
+
+        **Query ID:** {new_id}
+        **Title:** {contrib['title']}
+        **Category:** {contrib['category']}
+        """)
+
+        st.info("Note: Your query is available for this session. Persistent storage coming in a future update.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("View Your Query"):
+                go_to_detail(new_id)
+        with col2:
+            if st.button("Contribute Another"):
+                st.session_state['contribution'] = {}
+                st.session_state['contribution_step'] = 1
+                st.rerun()
+
+
+# =============================================================================
+# AI QUERY BUILDER (Stories 4.1-4.4)
+# =============================================================================
+
+def get_claude_client():
+    """Get Claude API client if configured (Story 4.1)."""
+    try:
+        import anthropic
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            try:
+                api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            except:
+                pass
+        if api_key:
+            return anthropic.Anthropic(api_key=api_key)
+    except ImportError:
+        pass
+    return None
+
+
+def is_ai_available() -> bool:
+    """Check if AI features are available."""
+    return get_claude_client() is not None
+
+
+PATSTAT_SYSTEM_PROMPT = """You are an expert SQL query writer for EPO PATSTAT on BigQuery.
+
+You have access to these main tables:
+- tls201_appln: Patent applications (main table) - columns: appln_id, appln_auth, appln_filing_year, granted, docdb_family_id, docdb_family_size
+- tls206_person: Applicants and inventors - columns: person_id, person_name, person_ctry_code, psn_sector, doc_std_name
+- tls207_pers_appln: Links persons to applications - columns: person_id, appln_id, applt_seq_nr, invt_seq_nr
+- tls209_appln_ipc: IPC classifications - columns: appln_id, ipc_class_symbol
+- tls224_appln_cpc: CPC classifications - columns: appln_id, cpc_class_symbol
+- tls211_pat_publn: Publications - columns: pat_publn_id, appln_id, publn_date, publn_first_grant
+- tls212_citation: Citation data - columns: pat_publn_id, cited_pat_publn_id
+- tls230_appln_techn_field: WIPO technology fields - columns: appln_id, techn_field_nr, weight
+- tls901_techn_field_ipc: Technology field definitions - columns: techn_field_nr, techn_field, techn_sector
+- tls801_country: Country codes - columns: ctry_code, st3_name
+
+Generate BigQuery-compatible SQL that:
+1. Uses proper table names with backticks
+2. Includes appropriate JOINs
+3. Has sensible LIMIT (default 50)
+4. Handles NULLs appropriately
+5. Returns results within 15 seconds typically
+
+Respond in this exact format:
+EXPLANATION:
+[2-3 sentences explaining what the query does in plain language]
+
+SQL:
+```sql
+[Your SQL query here]
+```
+
+NOTES:
+[Any warnings or suggestions, or "None" if the query is straightforward]"""
+
+
+def generate_sql_query(user_request: str) -> dict:
+    """Generate SQL from natural language using Claude (Story 4.2)."""
+    client = get_claude_client()
+    if not client:
+        return {'success': False, 'error': 'AI not configured'}
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            system=PATSTAT_SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": f"Generate a BigQuery SQL query for this request:\n\n{user_request}"
+            }]
+        )
+
+        return parse_ai_response(response.content[0].text)
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+def parse_ai_response(response_text: str) -> dict:
+    """Parse structured response from Claude (Story 4.2)."""
+    result = {
+        'explanation': '',
+        'sql': '',
+        'notes': '',
+        'success': True,
+        'error': None
+    }
+
+    try:
+        # Extract explanation
+        if 'EXPLANATION:' in response_text:
+            explanation_start = response_text.index('EXPLANATION:') + len('EXPLANATION:')
+            explanation_end = response_text.index('SQL:') if 'SQL:' in response_text else len(response_text)
+            result['explanation'] = response_text[explanation_start:explanation_end].strip()
+
+        # Extract SQL
+        if '```sql' in response_text:
+            sql_start = response_text.index('```sql') + 6
+            sql_end = response_text.index('```', sql_start)
+            result['sql'] = response_text[sql_start:sql_end].strip()
+        elif '```' in response_text:
+            sql_start = response_text.index('```') + 3
+            sql_end = response_text.index('```', sql_start)
+            result['sql'] = response_text[sql_start:sql_end].strip()
+
+        # Extract notes
+        if 'NOTES:' in response_text:
+            notes_start = response_text.index('NOTES:') + len('NOTES:')
+            result['notes'] = response_text[notes_start:].strip()
+
+        if not result['sql']:
+            result['success'] = False
+            result['error'] = 'Could not extract SQL from response'
+
+    except Exception as e:
+        result['success'] = False
+        result['error'] = f"Could not parse AI response: {str(e)}"
+
+    return result
+
+
+def render_ai_builder_page():
+    """Render the AI Query Builder (Stories 4.1-4.4)."""
+    if st.button("← Back to Questions", key="back_from_ai"):
+        go_to_landing()
+        return
+
+    st.header("🤖 AI Query Builder")
+    st.markdown("Describe what you want to analyze in plain English. Our AI will generate the SQL query for you.")
+
+    if not is_ai_available():
+        st.warning("""
+        **AI features not configured**
+
+        To enable AI query generation:
+        1. Get an API key from [Anthropic](https://console.anthropic.com)
+        2. Set `ANTHROPIC_API_KEY` in your environment or Streamlit secrets
+        """)
+        return
+
+    # Tips expander
+    with st.expander("💡 Tips for better results"):
+        st.markdown("""
+        **Be specific about:**
+        - **Technology**: Use IPC codes if you know them (e.g., "F03D for wind motors") or describe clearly
+        - **Geography**: Country codes (DE, US, CN) or full names
+        - **Time period**: "Since 2018" or "between 2015 and 2023"
+        - **What you want**: "Top 10 companies by patent count", "Filing trend over time"
+
+        **Example requests:**
+        - "Who are the main competitors in medical imaging technology in Europe since 2020?"
+        - "Show patent filing trends for AI/machine learning in US, CN, and EP over the last 10 years"
+        - "Which universities collaborate most with industry on battery research?"
+        """)
+
+    # Input area
+    ai_request = st.text_area(
+        "Describe your analysis need",
+        value=st.session_state.get('ai_request', ''),
+        placeholder="Show me the top 10 companies filing wind energy patents in Germany since 2018...",
+        height=150,
+        key="ai_request_input"
+    )
+    st.session_state['ai_request'] = ai_request
+
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        generate_clicked = st.button("Generate Query", type="primary", disabled=not ai_request.strip())
+
+    # Generate query
+    if generate_clicked and ai_request.strip():
+        with st.spinner("🤖 AI is generating your query..."):
+            result = generate_sql_query(ai_request)
+
+            if result['success']:
+                # Store in session state
+                st.session_state['ai_generation'] = result
+                # Add to version history
+                if 'ai_query_versions' not in st.session_state:
+                    st.session_state['ai_query_versions'] = []
+                st.session_state['ai_query_versions'].append({
+                    'request': ai_request,
+                    'result': result,
+                    'timestamp': time.strftime('%Y-%m-%d %H:%M')
+                })
+            else:
+                st.error(f"Generation failed: {result['error']}")
+
+    # Display results
+    generation = st.session_state.get('ai_generation')
+    if generation and generation.get('success'):
+        st.divider()
+        st.subheader("Generated Query")
+
+        # Explanation
+        st.markdown("**📝 What this query does:**")
+        st.info(generation.get('explanation', 'No explanation provided'))
+
+        # SQL
+        st.markdown("**💻 SQL Query:**")
+        st.code(generation['sql'], language="sql")
+
+        # Notes
+        if generation.get('notes') and generation['notes'].lower() != 'none':
+            st.markdown(f"**⚠️ Notes:** {generation['notes']}")
+
+        # Actions
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("🧪 Preview Results"):
+                client = get_bigquery_client()
+                if client:
+                    with st.spinner("Running query..."):
+                        try:
+                            test_sql = generation['sql']
+                            if 'LIMIT' not in test_sql.upper():
+                                test_sql = test_sql.rstrip().rstrip(';') + ' LIMIT 100'
+                            df, exec_time = run_query(client, test_sql)
+                            st.success(f"Executed in {format_time(exec_time)} - {len(df)} rows")
+
+                            # Show insight headline
+                            query_info = {'title': 'AI Query', 'category': 'Technology'}
+                            headline = generate_insight_headline(df, query_info)
+                            if headline:
+                                st.markdown(headline)
+
+                            # Show chart
+                            chart = render_chart(df, query_info)
+                            if chart:
+                                st.altair_chart(chart, use_container_width=True)
+
+                            with st.expander("View Data"):
+                                st.dataframe(df, use_container_width=True)
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+
+        with col2:
+            if st.button("⭐ Save to Favorites"):
+                # Save to favorites
+                if 'favorites' not in st.session_state:
+                    st.session_state['favorites'] = []
+                fav = {
+                    'id': f"AI_{len(st.session_state['favorites']) + 1:03d}",
+                    'name': ai_request[:50] + "..." if len(ai_request) > 50 else ai_request,
+                    'sql': generation['sql'],
+                    'explanation': generation.get('explanation', ''),
+                    'source': 'ai_generated'
+                }
+                st.session_state['favorites'].append(fav)
+                st.success("Saved to favorites!")
+
+        # Version history
+        versions = st.session_state.get('ai_query_versions', [])
+        if len(versions) > 1:
+            with st.expander(f"📜 Previous Versions ({len(versions) - 1})"):
+                for i, v in enumerate(reversed(versions[:-1])):
+                    st.markdown(f"**v{len(versions) - i - 1}** - {v['timestamp']}")
+                    st.caption(v['request'][:80] + "..." if len(v['request']) > 80 else v['request'])
+                    if st.button("Use this version", key=f"use_v{i}"):
+                        st.session_state['ai_generation'] = v['result']
+                        st.session_state['ai_request'] = v['request']
+                        st.rerun()
+
+
 def main():
     """Main application entry point with session-state based routing (Story 1.1).
 
     Routes between:
     - Landing page: Category pills + query list + common questions
     - Detail page: Query parameters + execution + results
+    - Contribute page: Query contribution flow (Story 3.1)
+    - AI Builder page: Natural language query generation (Story 4.1)
     """
     # Initialize session state for navigation
     init_session_state()
@@ -667,19 +1602,25 @@ def main():
     if client is None:
         st.stop()
 
-    # Route based on current_page session state (Task 6)
-    if st.session_state.get('current_page') == 'detail':
-        # Detail page: Show selected query (AC #4)
+    # Route based on current_page session state
+    current_page = st.session_state.get('current_page', 'landing')
+
+    if current_page == 'detail':
         query_id = st.session_state.get('selected_query')
         if query_id:
             render_detail_page(query_id)
         else:
-            # Fallback to landing if no query selected
             st.session_state['current_page'] = 'landing'
             render_landing_page()
+    elif current_page == 'contribute':
+        render_contribute_page()
+    elif current_page == 'ai_builder':
+        render_ai_builder_page()
     else:
-        # Landing page: Show categories and query list (AC #1, #2, #3)
         render_landing_page()
+
+    # Footer (Story 5.3)
+    render_footer()
 
 
 if __name__ == "__main__":

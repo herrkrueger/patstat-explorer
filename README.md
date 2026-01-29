@@ -43,10 +43,14 @@ PATSTAT Explorer provides **19 predefined SQL queries** (18 static + 1 dynamic/i
 - **Interactive Analysis Panel**: Dynamic query with customizable jurisdiction, technology field, and year range
 - **Predefined Query Library**: 18 static queries covering database exploration, market intelligence, technology scouting, competitive analysis, citations, and regional analysis
 - **Stakeholder Filtering**: Filter queries by PATLIB, BUSINESS, or UNIVERSITY perspective
-- **Result Visualization**: Tables with metrics, line charts for trends
-- **Export Options**: Download results as CSV
+- **Search & Filter**: Full-text search across query titles, descriptions, and tags
+- **Result Visualization**: Tables with metrics, Altair charts for trends
+- **Export Options**: Download results as CSV, charts as HTML
 - **Query Documentation**: Each query includes explanation and key outputs
 - **Performance Estimates**: Cached vs. first-run timing displayed per query
+- **AI Query Builder**: Describe your analysis in plain English - AI generates the SQL (requires API key)
+- **Contribute Queries**: Share your SQL expertise with the PATLIB community
+- **TIP Integration**: Export queries to EPO's Training Intelligence Portal (Jupyter)
 
 ## Local Development
 ### Prerequisites

@@ -48,36 +48,36 @@ development_status:
   1-4-insight-headlines-and-altair-visualization: done
   1-5-export-and-download-functionality: done
   1-6-sql-transparency-features: done
-  1-7-convert-all-static-queries-to-dynamic: partial
+  1-7-convert-all-static-queries-to-dynamic: done
   epic-1-retrospective: optional
 
   # Epic 2: Query Library Expansion
-  epic-2: backlog
-  2-1-query-search-and-filter: backlog
-  2-2-query-metadata-display: backlog
-  2-3-extract-and-add-epo-training-queries-batch-1: backlog
-  2-4-extract-and-add-epo-training-queries-batch-2: backlog
+  epic-2: done
+  2-1-query-search-and-filter: done
+  2-2-query-metadata-display: done
+  2-3-extract-and-add-epo-training-queries-batch-1: done
+  2-4-extract-and-add-epo-training-queries-batch-2: done
   epic-2-retrospective: optional
 
   # Epic 3: Query Contribution System
-  epic-3: backlog
-  3-1-query-submission-interface: backlog
-  3-2-dynamic-parameter-definition: backlog
-  3-3-query-preview-and-validation: backlog
-  3-4-query-submission-and-confirmation: backlog
+  epic-3: in-progress
+  3-1-query-submission-interface: done
+  3-2-dynamic-parameter-definition: done
+  3-3-query-preview-and-validation: done
+  3-4-query-submission-and-confirmation: done
   epic-3-retrospective: optional
 
   # Epic 4: AI Query Builder
-  epic-4: backlog
-  4-1-natural-language-input-interface: backlog
-  4-2-ai-generated-sql-with-explanation: backlog
-  4-3-query-preview-and-refinement: backlog
-  4-4-save-ai-query-to-favorites: backlog
+  epic-4: in-progress
+  4-1-natural-language-input-interface: done
+  4-2-ai-generated-sql-with-explanation: done
+  4-3-query-preview-and-refinement: done
+  4-4-save-ai-query-to-favorites: done
   epic-4-retrospective: optional
 
   # Epic 5: Training & TIP Integration
-  epic-5: backlog
-  5-1-enhanced-take-to-tip-button: backlog
-  5-2-tip-jupyter-export-instructions: backlog
-  5-3-github-repository-integration: backlog
+  epic-5: in-progress
+  5-1-enhanced-take-to-tip-button: done
+  5-2-tip-jupyter-export-instructions: done
+  5-3-github-repository-integration: done
   epic-5-retrospective: optional
