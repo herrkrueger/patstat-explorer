@@ -215,6 +215,29 @@ def render_single_parameter(name: str, config: dict, key_prefix: str = ""):
         )
         return {'year_start': year_range[0], 'year_end': year_range[1]}
 
+    elif param_type == 'year_picker':
+        # Two separate year pickers instead of slider - better for wide ranges (1877-present)
+        default_start = config.get('default_start', DEFAULT_YEAR_START)
+        default_end = config.get('default_end', DEFAULT_YEAR_END)
+        col1, col2 = st.columns(2)
+        with col1:
+            year_start = st.number_input(
+                f"{label} (from)",
+                min_value=YEAR_MIN,
+                max_value=YEAR_MAX,
+                value=default_start,
+                key=f"{key}_start"
+            )
+        with col2:
+            year_end = st.number_input(
+                f"{label} (to)",
+                min_value=YEAR_MIN,
+                max_value=YEAR_MAX,
+                value=default_end,
+                key=f"{key}_end"
+            )
+        return {'year_start': int(year_start), 'year_end': int(year_end)}
+
     elif param_type == 'multiselect':
         options = resolve_options(config.get('options', []))
         defaults = config.get('defaults', options[:3] if options else [])
@@ -269,7 +292,7 @@ def render_query_parameters(query_id: str) -> tuple:
             with cols[col_idx % (len(cols) - 1)]:
                 value = render_single_parameter(param_name, param_def, key_prefix)
 
-                if param_def.get('type') == 'year_range':
+                if param_def.get('type') in ('year_range', 'year_picker'):
                     collected_params['year_start'] = value['year_start']
                     collected_params['year_end'] = value['year_end']
                 else:
@@ -289,6 +312,10 @@ def render_chart(df, query_info):
         return None
 
     viz_config = query_info.get('visualization', {})
+
+    # Allow disabling chart with visualization: None
+    if viz_config is None:
+        return None
 
     x_col = viz_config.get('x', df.columns[0])
     y_col = viz_config.get('y', df.columns[-1] if len(df.columns) > 1 else df.columns[0])
@@ -310,7 +337,60 @@ def render_chart(df, query_info):
             if color_col else alt.value(COLOR_PRIMARY)
         )
 
-        if chart_type == "line":
+        if chart_type == "pie":
+            # Pie chart using theta encoding
+            chart = alt.Chart(df).mark_arc(innerRadius=50).encode(
+                theta=alt.Theta(f"{y_col}:Q"),
+                color=alt.Color(f"{x_col}:N", scale=alt.Scale(range=COLOR_PALETTE),
+                               legend=alt.Legend(title=x_col.replace("_", " ").title())),
+                tooltip=[
+                    alt.Tooltip(f"{x_col}:N", title=x_col.replace("_", " ").title()),
+                    alt.Tooltip(f"{y_col}:Q", title=y_col.replace("_", " ").title(), format=",")
+                ]
+            ).properties(height=400)
+        elif chart_type == "stacked_bar":
+            # Stacked bar chart
+            stacked_columns = viz_config.get('stacked_columns')
+
+            if stacked_columns:
+                # Transform wide format to long format for stacking
+                import pandas as pd
+                df_long = df.melt(
+                    id_vars=[x_col],
+                    value_vars=stacked_columns,
+                    var_name='status',
+                    value_name='count'
+                )
+                # Clean up status names (e.g., "not_granted" -> "Not Granted")
+                df_long['status'] = df_long['status'].str.replace('_', ' ').str.title()
+
+                chart = alt.Chart(df_long).mark_bar().encode(
+                    x=alt.X(f"{x_col}:O", title=x_col.replace("_", " ").title()),
+                    y=alt.Y("count:Q", title="Count", stack='zero'),
+                    color=alt.Color("status:N", scale=alt.Scale(range=COLOR_PALETTE),
+                                   legend=alt.Legend(title="Status")),
+                    order=alt.Order("status:N", sort='descending'),
+                    tooltip=[
+                        alt.Tooltip(f"{x_col}:O", title=x_col.replace("_", " ").title()),
+                        alt.Tooltip("status:N", title="Status"),
+                        alt.Tooltip("count:Q", title="Count", format=",")
+                    ]
+                ).properties(height=400)
+            else:
+                # Data already in long format
+                chart = alt.Chart(df).mark_bar().encode(
+                    x=alt.X(f"{x_col}:O", title=x_col.replace("_", " ").title()),
+                    y=alt.Y(f"{y_col}:Q", title=y_col.replace("_", " ").title(), stack='zero'),
+                    color=alt.Color(f"{color_col}:N", scale=alt.Scale(range=COLOR_PALETTE),
+                                   legend=alt.Legend(title=color_col.replace("_", " ").title())),
+                    order=alt.Order(f"{color_col}:N", sort='descending'),
+                    tooltip=[
+                        alt.Tooltip(f"{x_col}:O", title=x_col.replace("_", " ").title()),
+                        alt.Tooltip(f"{color_col}:N", title=color_col.replace("_", " ").title()),
+                        alt.Tooltip(f"{y_col}:Q", title=y_col.replace("_", " ").title(), format=",")
+                    ]
+                ).properties(height=400)
+        elif chart_type == "line":
             chart = alt.Chart(df).mark_line(point=True).encode(
                 x=alt.X(f"{x_col}:O", title=x_col.replace("_", " ").title()),
                 y=alt.Y(f"{y_col}:Q", title=y_col.replace("_", " ").title()),
@@ -573,7 +653,11 @@ def render_detail_page(query_id: str):
             st.caption(f"Estimated: ~{format_time(estimated_cached)}")
 
     with st.expander("View SQL Query", expanded=False):
-        display_sql = query_info["sql"]
+        # Show sql_template if available (with parameter placeholders), otherwise static sql
+        if "sql_template" in query_info:
+            display_sql = query_info["sql_template"]
+        else:
+            display_sql = query_info["sql"]
         params_config = query_info.get('parameters', {})
         if params_config:
             param_parts = []
@@ -653,15 +737,64 @@ def render_detail_page(query_id: str):
 
                 ''
 
-                chart = render_chart(df, query_info)
-                if chart:
-                    st.altair_chart(chart, use_container_width=True)
+                display_mode = query_info.get('display_mode', 'default')
+                chart = None  # Initialize chart variable for all display modes
 
-                if len(df) <= 5 and len(df.columns) == 2:
-                    render_metrics(df, query_info)
+                if display_mode == 'metrics_grid':
+                    # Special mode: Display results as metric cards in a grid
+                    # Works with 2-column dataframes (metric, value)
+                    if len(df.columns) == 2:
+                        metric_col = df.columns[0]
+                        value_col = df.columns[1]
 
-                with st.expander("View Data Table", expanded=False):
-                    st.dataframe(df, use_container_width=True, height=400)
+                        # Display metrics in rows of 4
+                        rows = [df.iloc[i:i+4] for i in range(0, len(df), 4)]
+                        for row_df in rows:
+                            cols = st.columns(4)
+                            for idx, (_, row) in enumerate(row_df.iterrows()):
+                                with cols[idx]:
+                                    label = str(row[metric_col])
+                                    value = row[value_col]
+                                    # Format large numbers with commas
+                                    if isinstance(value, (int, float)):
+                                        st.metric(label=label, value=f"{value:,.0f}")
+                                    elif str(value).replace(',', '').isdigit():
+                                        st.metric(label=label, value=f"{int(str(value).replace(',', '')):,}")
+                                    else:
+                                        st.metric(label=label, value=str(value))
+
+                        ''
+
+                    # Optional chart (only if visualization config exists and not disabled)
+                    if query_info.get('visualization', {}).get('type'):
+                        chart = render_chart(df, query_info)
+                        if chart:
+                            st.altair_chart(chart, use_container_width=True)
+
+                    # Data table in expander (same as default)
+                    with st.expander("View Data Table", expanded=False):
+                        st.dataframe(df, use_container_width=True, height=400)
+
+                elif display_mode == 'chart_and_table':
+                    # Chart + visible table (no expander)
+                    chart = render_chart(df, query_info)
+                    if chart:
+                        st.altair_chart(chart, use_container_width=True)
+
+                    st.markdown("### Data")
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+
+                else:
+                    # Default mode
+                    chart = render_chart(df, query_info)
+                    if chart:
+                        st.altair_chart(chart, use_container_width=True)
+
+                    if len(df) <= 5 and len(df.columns) == 2:
+                        render_metrics(df, query_info)
+
+                    with st.expander("View Data Table", expanded=False):
+                        st.dataframe(df, use_container_width=True, height=400)
 
                 st.divider()
 

@@ -17,8 +17,8 @@ DEFAULT_YEAR_END = 2023
 DEFAULT_JURISDICTIONS = ["EP", "US", "DE"]
 DEFAULT_TECH_FIELD = None
 
-# Year range bounds for sliders
-YEAR_MIN = 1990
+# Year range bounds for sliders and pickers
+YEAR_MIN = 1782  # PATSTAT earliest patents (French patents from 1782)
 YEAR_MAX = 2024
 
 # =============================================================================

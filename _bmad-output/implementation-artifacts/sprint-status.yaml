@@ -88,5 +88,5 @@ development_status:
   6-1-fix-ai-query-builder: done
   6-2-refactor-monolithic-structure: review  # 2026-01-31: Ready for review
   6-3-ui-polish-consistency: deferred  # 2026-01-31: Partial impl, deferred to future UI epic
-  6-4-query-quality-audit: ready-for-dev
+  6-4-query-quality-audit: in-progress
   epic-6-retrospective: optional

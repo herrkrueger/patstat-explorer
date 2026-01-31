@@ -114,19 +114,68 @@ For each query, verify:
 
 ## Audit Log
 
-*(To be filled during implementation)*
+### Session 1: 2026-01-31 (Q01-Q13)
 
-### Q01: Overall PATSTAT database statistics
-- [ ] Reviewed
-- Issues:
-- Fixes:
+#### Q01: Overall PATSTAT database statistics
+- [x] Reviewed
+- Changes: Added metrics_grid display mode, extended query with Publications/Families/CPC/Citations/Legal Events, year range defaults to 1782-2024
+- Note: Significant enhancement, may be over-engineered
 
-### Q02: Patent applications by filing year
-- [ ] Reviewed
-- Issues:
-- Fixes:
+#### Q02: Which patent offices are most active?
+- [x] Reviewed - Works fine, no changes needed
 
-*(... continue for all 42 queries)*
+#### Q03: How have patent applications changed over time?
+- [x] Reviewed
+- Changes: Added stacked bar chart (granted vs not_granted), fixed SQL display to show sql_template
+- Todo: avg_days_to_grant calculation removed (buggy), fix later
+
+#### Q04: What are the most common technology classes?
+- [x] Reviewed - Works fine
+- Todo: Add IPC text description, not only the symbol
+
+#### Q05: What do sample patent records look like?
+- [x] Reviewed
+- Changes: Chart disabled (made no sense for sample data)
+- Todo: Extend table with more data (applicant count, inventor count, title)
+
+#### Q06: Which countries lead in patent filing activity?
+- [x] Reviewed - Works but has conceptual issue
+- Todo: Fix query mixing person_ctry_code (applicant origin) with appln_auth filter (patent office)
+
+#### Q07: What are the green technology trends by country?
+- [x] Reviewed - Works fine, no changes needed
+
+#### Q08: Which technology fields are most active?
+- [x] Reviewed - Works great, no changes needed
+
+#### Q09: How are patent families distributed?
+- [x] Reviewed - Works fine, no changes needed
+
+#### Q10: Who is building AI-assisted diagnostics portfolios?
+- [x] Reviewed
+- Changes: Fixed timing estimates (25s first run, 9s cached)
+
+#### Q11: Who are the top patent filers?
+- [x] Reviewed - Works fine, no changes needed
+
+#### Q12: Where do MedTech competitors file their patents?
+- [x] Reviewed
+- Changes: Chart disabled (table data not suitable for chart)
+
+#### Q13: Which patents are most frequently cited?
+- [x] Reviewed
+- Changes: Fixed timing estimates (22s first run, 3s cached)
+
+#### Q14-Q42: Not yet reviewed
+- [ ] To be continued in next session
+
+### Infrastructure Improvements Made
+- Added `metrics_grid` display mode for statistics overview
+- Added `stacked_bar` chart type with column transformation
+- Added `visualization: None` option to disable charts
+- Added `todo` field to queries for future improvements
+- Fixed View SQL Query to show sql_template instead of static sql
+- Updated YEAR_MIN to 1782 (actual PATSTAT earliest year)
 
 ## Dev Notes
 
@@ -154,6 +203,8 @@ Dev: "Looks good now, next query"
 
 ## File List
 - queries_bq.py (primary - all query definitions)
+- modules/ui.py (display mode and chart enhancements)
+- modules/config.py (YEAR_MIN updated)
 - This story file (audit log)
 
 ## Dependencies
@@ -163,3 +214,4 @@ Dev: "Looks good now, next query"
 ## Change Log
 - 2026-01-30: Story created
 - 2026-01-31: Story rewritten - clarified as AI-assisted manual content review, not test automation
+- 2026-01-31: Session 1 - Reviewed Q01-Q13, added infrastructure improvements (metrics_grid, stacked_bar, todo field)
