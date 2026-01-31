@@ -53,64 +53,100 @@ QUERIES = {
         "title": "What are the overall PATSTAT database statistics?",
         "tags": ["PATLIB"],
         "category": "Trends",
-        "description": "Overall PATSTAT database statistics and key metrics",
+        "description": "Comprehensive PATSTAT database statistics: applications, grants, publications, families, and more",
         "parameters": {
             "year_range": {
                 "type": "year_range",
                 "label": "Filing Year Range",
-                "default_start": 2014,
-                "default_end": 2023,
+                "default_start": 1782,
+                "default_end": 2024,
                 "required": False
             }
         },
-        "explanation": """High-level statistics about the PATSTAT database:
-- Total number of patent applications
-- Date range of the data
-- Number of unique applicants and inventors
-- Geographic coverage (countries)
+        "explanation": """Comprehensive statistics about the PATSTAT database:
+- Total patent applications and granted patents
+- Date range coverage (earliest to latest filing year)
+- Publications and patent families
+- Unique persons (applicants/inventors)
+- CPC classifications, citations, and legal events
 
 Essential for understanding the scope and coverage of the database.""",
         "key_outputs": [
             "Total patent applications",
-            "Date range (earliest to latest)",
-            "Unique applicants/inventors count",
-            "Countries covered"
+            "Granted patents",
+            "Earliest/Latest filing year",
+            "Publications",
+            "Patent families",
+            "Unique persons",
+            "CPC symbols assigned",
+            "Citations",
+            "Legal events"
         ],
-        "estimated_seconds_first_run": 1,
-        "estimated_seconds_cached": 1,
+        "estimated_seconds_first_run": 15,
+        "estimated_seconds_cached": 5,
+        "display_mode": "metrics_grid",
         "sql": """
             SELECT 'Total Applications' AS metric, CAST(COUNT(*) AS STRING) AS value FROM `tls201_appln`
+            UNION ALL
+            SELECT 'Granted Patents', CAST(COUNT(*) AS STRING) FROM `tls201_appln` WHERE granted = 'Y'
             UNION ALL
             SELECT 'Earliest Filing Year', CAST(MIN(appln_filing_year) AS STRING) FROM `tls201_appln` WHERE appln_filing_year > 0
             UNION ALL
             SELECT 'Latest Filing Year', CAST(MAX(appln_filing_year) AS STRING) FROM `tls201_appln`
             UNION ALL
-            SELECT 'Granted Patents', CAST(COUNT(*) AS STRING) FROM `tls201_appln` WHERE granted = 'Y'
+            SELECT 'Publications', CAST(COUNT(*) AS STRING) FROM `tls211_pat_publn`
+            UNION ALL
+            SELECT 'Patent Families', CAST(COUNT(DISTINCT docdb_family_id) AS STRING) FROM `tls201_appln` WHERE docdb_family_id > 0
             UNION ALL
             SELECT 'Unique Persons', CAST(COUNT(*) AS STRING) FROM `tls206_person`
             UNION ALL
-            SELECT 'Countries with Applicants', CAST(COUNT(DISTINCT person_ctry_code) AS STRING) FROM `tls206_person` WHERE person_ctry_code IS NOT NULL
+            SELECT 'CPC Symbols Assigned', CAST(COUNT(*) AS STRING) FROM `tls224_appln_cpc`
+            UNION ALL
+            SELECT 'Citations', CAST(COUNT(*) AS STRING) FROM `tls212_citation`
+            UNION ALL
+            SELECT 'Legal Events', CAST(COUNT(*) AS STRING) FROM `tls231_inpadoc_legal_event`
         """,
         "sql_template": """
             SELECT 'Total Applications' AS metric, CAST(COUNT(*) AS STRING) AS value
             FROM `tls201_appln` WHERE appln_filing_year BETWEEN @year_start AND @year_end
             UNION ALL
+            SELECT 'Granted Patents', CAST(COUNT(*) AS STRING)
+            FROM `tls201_appln` WHERE granted = 'Y' AND appln_filing_year BETWEEN @year_start AND @year_end
+            UNION ALL
             SELECT 'Earliest Filing Year', CAST(MIN(appln_filing_year) AS STRING)
-            FROM `tls201_appln` WHERE appln_filing_year BETWEEN @year_start AND @year_end
+            FROM `tls201_appln` WHERE appln_filing_year BETWEEN @year_start AND @year_end AND appln_filing_year > 0
             UNION ALL
             SELECT 'Latest Filing Year', CAST(MAX(appln_filing_year) AS STRING)
             FROM `tls201_appln` WHERE appln_filing_year BETWEEN @year_start AND @year_end
             UNION ALL
-            SELECT 'Granted Patents', CAST(COUNT(*) AS STRING)
-            FROM `tls201_appln` WHERE granted = 'Y' AND appln_filing_year BETWEEN @year_start AND @year_end
+            SELECT 'Publications', CAST(COUNT(*) AS STRING)
+            FROM `tls211_pat_publn` p
+            JOIN `tls201_appln` a ON p.appln_id = a.appln_id
+            WHERE a.appln_filing_year BETWEEN @year_start AND @year_end
             UNION ALL
-            SELECT 'Unique Applicants', CAST(COUNT(DISTINCT pa.person_id) AS STRING)
+            SELECT 'Patent Families', CAST(COUNT(DISTINCT docdb_family_id) AS STRING)
+            FROM `tls201_appln` WHERE docdb_family_id > 0 AND appln_filing_year BETWEEN @year_start AND @year_end
+            UNION ALL
+            SELECT 'Unique Persons', CAST(COUNT(DISTINCT pa.person_id) AS STRING)
             FROM tls207_pers_appln pa
             JOIN tls201_appln a ON pa.appln_id = a.appln_id
-            WHERE pa.applt_seq_nr > 0 AND a.appln_filing_year BETWEEN @year_start AND @year_end
+            WHERE a.appln_filing_year BETWEEN @year_start AND @year_end
             UNION ALL
-            SELECT 'Filing Jurisdictions', CAST(COUNT(DISTINCT appln_auth) AS STRING)
-            FROM `tls201_appln` WHERE appln_filing_year BETWEEN @year_start AND @year_end
+            SELECT 'CPC Symbols Assigned', CAST(COUNT(*) AS STRING)
+            FROM `tls224_appln_cpc` c
+            JOIN `tls201_appln` a ON c.appln_id = a.appln_id
+            WHERE a.appln_filing_year BETWEEN @year_start AND @year_end
+            UNION ALL
+            SELECT 'Citations', CAST(COUNT(*) AS STRING)
+            FROM `tls212_citation` cit
+            JOIN `tls211_pat_publn` p ON cit.pat_publn_id = p.pat_publn_id
+            JOIN `tls201_appln` a ON p.appln_id = a.appln_id
+            WHERE a.appln_filing_year BETWEEN @year_start AND @year_end
+            UNION ALL
+            SELECT 'Legal Events', CAST(COUNT(*) AS STRING)
+            FROM `tls231_inpadoc_legal_event` le
+            JOIN `tls201_appln` a ON le.appln_id = a.appln_id
+            WHERE a.appln_filing_year BETWEEN @year_start AND @year_end
         """
     },
 
@@ -173,7 +209,7 @@ EP = European Patent Office, US = USPTO, CN = CNIPA, etc.""",
         "title": "How have patent applications changed over time?",
         "tags": ["PATLIB"],
         "category": "Trends",
-        "description": "Patent application trends over time (by filing year)",
+        "description": "Patent application trends over time showing granted vs pending/rejected",
         "parameters": {
             "year_range": {
                 "type": "year_range",
@@ -190,35 +226,44 @@ EP = European Patent Office, US = USPTO, CN = CNIPA, etc.""",
                 "required": True
             }
         },
-        "explanation": """Shows the distribution of patent applications across filing years.
-Useful for understanding data coverage and identifying trends in global patent activity.
+        "explanation": """Shows the distribution of patent applications across filing years,
+broken down by grant status (Granted vs Not Granted).
 
-Note: Recent years may show lower counts due to publication delays (18 months from filing).""",
+Note: Recent years may show lower grant rates due to:
+- Publication delays (18 months from filing)
+- Pending examination (can take 3-5 years)""",
         "key_outputs": [
             "Applications per year",
-            "Year-over-year changes",
-            "Grant rates per year"
+            "Granted vs Not Granted breakdown",
+            "Grant rate percentage"
         ],
-        "estimated_seconds_first_run": 1,
+        "estimated_seconds_first_run": 3,
         "estimated_seconds_cached": 1,
+        "visualization": {
+            "x": "filing_year",
+            "y": "count",
+            "color": "status",
+            "type": "stacked_bar",
+            "stacked_columns": ["granted", "not_granted"]
+        },
         "sql": """
             SELECT
-                appln_filing_year,
+                appln_filing_year AS filing_year,
                 COUNT(*) AS applications,
-                COUNT(*) - LAG(COUNT(*)) OVER (ORDER BY appln_filing_year) AS yoy_change,
                 COUNT(CASE WHEN granted = 'Y' THEN 1 END) AS granted,
+                COUNT(CASE WHEN granted != 'Y' OR granted IS NULL THEN 1 END) AS not_granted,
                 ROUND(COUNT(CASE WHEN granted = 'Y' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS grant_rate_pct
             FROM tls201_appln
             WHERE appln_filing_year BETWEEN 1980 AND 2024
             GROUP BY appln_filing_year
-            ORDER BY appln_filing_year DESC
+            ORDER BY appln_filing_year ASC
         """,
         "sql_template": """
             SELECT
-                appln_filing_year,
+                appln_filing_year AS filing_year,
                 COUNT(*) AS applications,
-                COUNT(*) - LAG(COUNT(*)) OVER (ORDER BY appln_filing_year) AS yoy_change,
                 COUNT(CASE WHEN granted = 'Y' THEN 1 END) AS granted,
+                COUNT(CASE WHEN granted != 'Y' OR granted IS NULL THEN 1 END) AS not_granted,
                 ROUND(COUNT(CASE WHEN granted = 'Y' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0), 1) AS grant_rate_pct
             FROM tls201_appln
             WHERE appln_filing_year BETWEEN @year_start AND @year_end
@@ -233,6 +278,7 @@ Note: Recent years may show lower counts due to publication delays (18 months fr
         "tags": ["PATLIB"],
         "category": "Technology",
         "description": "Most common IPC technology classes in the database",
+        "todo": "Add IPC text description, not only the symbol",
         "parameters": {
             "year_range": {
                 "type": "year_range",
@@ -301,6 +347,8 @@ IPC classes indicate the technology area of a patent:
         "tags": ["PATLIB"],
         "category": "Technology",
         "description": "Sample of 100 patent applications with key fields",
+        "todo": "Extend table with more data: applicant count, inventor count, title",
+        "visualization": None,
         "parameters": {},
         "explanation": """Returns a sample of patent applications to understand the data structure
 and available fields in the main application table (tls201_appln).
@@ -357,6 +405,7 @@ No parameters needed - this shows recent sample data.""",
         "tags": ["PATLIB", "BUSINESS"],
         "category": "Competitors",
         "description": "Which countries have the highest patent application activity?",
+        "todo": "Fix: query mixes person_ctry_code (applicant origin) with appln_auth filter (patent office). Clarify intent: applicants from country X, or filings at office X?",
         "parameters": {
             "year_range": {
                 "type": "year_range",
@@ -768,8 +817,8 @@ established players in this field.""",
             "Average time-to-grant in days and years",
             "Focus on granted patents only"
         ],
-        "estimated_seconds_first_run": 5,
-        "estimated_seconds_cached": 1,
+        "estimated_seconds_first_run": 25,
+        "estimated_seconds_cached": 9,
         "visualization": {
             "x": "company_name",
             "y": "patent_count",
@@ -997,6 +1046,7 @@ Minimum threshold of 50 patents ensures focus on significant players.""",
         "tags": ["BUSINESS"],
         "category": "Competitors",
         "description": "Geographic filing patterns of major MedTech competitors",
+        "visualization": None,
         "parameters": {
             "year_range": {
                 "type": "year_range",
@@ -1159,8 +1209,8 @@ Minimum threshold of 10 citations ensures significance.""",
             "Citation lag in years (knowledge diffusion speed)",
             "Cited patent filing year"
         ],
-        "estimated_seconds_first_run": 10,
-        "estimated_seconds_cached": 1,
+        "estimated_seconds_first_run": 22,
+        "estimated_seconds_cached": 3,
         "sql": """
             WITH citation_network AS (
                 SELECT
