@@ -2,6 +2,10 @@
 # Refactored modular structure (Story 6.2)
 
 import streamlit as st
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from modules.ui import (
     init_session_state,
