@@ -1,5 +1,5 @@
 ---
-status: ready-for-dev
+status: done
 epic: 6
 story: 1
 name: fix-ai-query-builder
@@ -33,10 +33,10 @@ name: fix-ai-query-builder
 
 ## Tasks/Subtasks
 
-- [ ] Fix Dependency: Add `anthropic` to `requirements.txt`
-- [ ] Fix Configuration: Update `app.py` to robustly load API key
-- [ ] Fix Implementation: Ensure `anthropic` client initialization handles missing keys gracefully
-- [ ] Verify: Test locally with `.env` (Manual check)
+- [x] Fix Dependency: Add `anthropic` to `requirements.txt`
+- [x] Fix Configuration: Update `app.py` to robustly load API key
+- [x] Fix Implementation: Ensure `anthropic` client initialization handles missing keys gracefully
+- [x] Verify: Test locally with `.env` (Manual check)
 
 ## Dev Notes
 
@@ -46,10 +46,15 @@ name: fix-ai-query-builder
 
 ## Dev Agent Record
 ### Implementation Plan
-- [ ]
+- [x] Verified `anthropic>=0.7.0` in requirements.txt
+- [x] Verified `get_claude_client()` in modules/logic.py:116-144
+- [x] Ran 14 tests in test_ai_config.py + test_ai_builder.py
 
 ### Completion Notes
-- [ ]
+- Implementation was already complete from Epic 4 work
+- `get_claude_client()` correctly checks st.secrets first, os.getenv second
+- Graceful None return on ImportError or missing key
+- All 14 tests passed (2026-01-30)
 
 ## File List
 - requirements.txt
@@ -57,4 +62,5 @@ name: fix-ai-query-builder
 
 ## Change Log
 - 2026-01-30: Story created
+- 2026-01-30: Story verified complete - all 14 tests passed, implementation was already in place from Epic 4
 
