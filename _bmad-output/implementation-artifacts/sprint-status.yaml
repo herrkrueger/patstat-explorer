@@ -86,7 +86,7 @@ development_status:
   # Epic 6: Stabilization & Refinement
   epic-6: in-progress
   6-1-fix-ai-query-builder: done
-  6-2-refactor-monolithic-structure: ready-for-dev  # 2026-01-31: Reset - work never performed, story rewritten
+  6-2-refactor-monolithic-structure: in-progress  # 2026-01-31: Development started
   6-3-ui-polish-consistency: ready-for-dev
   6-4-query-quality-audit: ready-for-dev
   epic-6-retrospective: optional
