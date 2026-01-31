@@ -492,28 +492,29 @@ def render_query_list(search_term: str = None, category_filter: str = None,
 
     for query_id, query_info in filtered_queries.items():
         with st.container(border=True):
-            col1, col2 = st.columns([4, 1])
+            # Row 1: Title + Time + Load button
+            col_title, col_time, col_action = st.columns([5, 1, 1])
 
-            with col1:
-                if st.button(
-                    f"**{query_id}:** {query_info['title']}",
-                    key=f"query_{query_id}",
-                    use_container_width=True
-                ):
+            with col_title:
+                st.markdown(f"**{query_id}:** {query_info['title']}")
+
+            with col_time:
+                est_time = query_info.get('estimated_seconds_cached', 5)
+                st.caption(f"~{format_time(est_time)}")
+                st.caption(query_info.get('category', ''))
+
+            with col_action:
+                if st.button("Load", key=f"load_{query_id}", use_container_width=True):
                     go_to_detail(query_id)
 
-                description = query_info.get('description', '')
-                if len(description) > 120:
-                    description = description[:117] + "..."
-                st.caption(description)
+            # Row 2: Description + Tags
+            description = query_info.get('description', '')
+            if len(description) > 120:
+                description = description[:117] + "..."
+            st.caption(description)
 
-                tags_html = render_tags_inline(query_info.get('tags', []))
-                st.markdown(tags_html, unsafe_allow_html=True)
-
-            with col2:
-                est_time = query_info.get('estimated_seconds_cached', 5)
-                st.metric("", f"~{format_time(est_time)}", label_visibility="collapsed")
-                st.caption(query_info.get('category', ''))
+            tags_html = render_tags_inline(query_info.get('tags', []))
+            st.markdown(tags_html, unsafe_allow_html=True)
 
 
 def render_detail_page(query_id: str):

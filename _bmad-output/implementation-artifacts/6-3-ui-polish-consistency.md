@@ -1,5 +1,5 @@
 ---
-status: ready-for-dev
+status: deferred
 epic: 6
 story: 3
 name: ui-polish-consistency
@@ -144,3 +144,4 @@ st.markdown(f'<span class="query-time">~{time}</span>', ...)
 - 2026-01-30: Story created
 - 2026-01-30: First implementation attempt reverted per user feedback (3-column header, gradient)
 - 2026-01-31: Story rewritten with specific query card layout fix based on user feedback
+- 2026-01-31: Partial implementation (3-column layout with Load button) - deferred to future UI epic for more refined work

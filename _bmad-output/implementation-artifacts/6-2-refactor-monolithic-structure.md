@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: review
 epic: 6
 story: 2
 name: refactor-monolithic-structure
@@ -75,8 +75,8 @@ name: refactor-monolithic-structure
 
 ### Phase 4: Verification
 - [x] Run `pytest tests/ -v` - all 90 tests pass
-- [ ] Run `streamlit run app.py` - manual smoke test
-- [ ] Verify each major feature works (landing, detail, contribute, AI builder)
+- [x] Run `streamlit run app.py` - manual smoke test
+- [x] Verify each major feature works (landing, detail, contribute, AI builder)
 
 ## Function-to-Module Mapping
 
@@ -216,7 +216,7 @@ if __name__ == "__main__":
 - [x] `python -c "from modules import ui"` - no errors
 - [x] `python -c "import app"` - no errors
 - [x] `pytest tests/ -v` - all tests pass (90 tests)
-- [ ] `streamlit run app.py` - app loads and works
+- [x] `streamlit run app.py` - app loads and works
 
 ## Out of Scope
 - Adding new tests (covered by 6.4)
@@ -264,8 +264,10 @@ if __name__ == "__main__":
   - test_filter_queries.py: imports from modules.logic, modules.config
   - test_query_metadata.py: imports from modules.ui, modules.utils
   - Fixed monkeypatch targets for session_state mocking
-- 2026-01-31: Phase 4 partial - 90 tests pass
-  - Awaiting manual smoke test
+- 2026-01-31: Phase 4 complete - all verification passed
+  - 90 tests pass
+  - Manual smoke test successful
+  - Fixed missing load_dotenv() call
 
 ## Change Log
 - 2026-01-30: Story created
@@ -274,3 +276,4 @@ if __name__ == "__main__":
 - 2026-01-31: Phase 1 complete - modules directory created with all 6 modules
 - 2026-01-31: Phase 2 complete - app.py refactored to 67 LOC entry point
 - 2026-01-31: Phase 3 complete - all test imports updated, 90 tests passing
+- 2026-01-31: Phase 4 complete - smoke test passed, story ready for review
