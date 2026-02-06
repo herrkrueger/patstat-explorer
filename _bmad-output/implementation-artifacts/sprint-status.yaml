@@ -33,7 +33,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-01-28
+generated: 2026-02-06
 project: patstat
 project_key: patstat
 tracking_system: file-system
@@ -84,9 +84,7 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Stabilization & Refinement
-  epic-6: in-progress
+  epic-6: done  # 2026-02-06: Core stabilization complete, remaining items moved to future work
   6-1-fix-ai-query-builder: done
   6-2-refactor-monolithic-structure: done  # 2026-02-01: Code review complete
-  6-3-ui-polish-consistency: backlog  # 2026-01-31: Partial impl, deferred to future UI epic
-  6-4-query-quality-audit: backlog  # 2026-02-01: Moved to backlog for future sprint
   epic-6-retrospective: optional
